@@ -1,0 +1,47 @@
+ActiveAdmin.register Eprime do
+
+  # See permitted parameters documentation:
+  # https://github.com/activeadmin/activeadmin/blob/master/docs/2-resource-customization.md#setting-up-strong-parameters
+  #
+  # Uncomment all parameters which should be permitted for assignment
+  #
+  permit_params :subject_id, :study_id, :eprimeid, :comments, :created_by
+  #
+  # or
+  #
+  # permit_params do
+  #   permitted = [:subject_id, :study_id, :eprime_id, :comments, :created_by]
+  #   permitted << :other if params[:action] == 'create' && current_user.admin?
+  #   permitted
+  # end
+  
+index do
+  id_column
+  column :subject_id
+  column :study_id
+  column :eprimeid
+  column :comments
+  column :created_by
+  actions
+end
+  # specify filters
+#  filter :id
+#  filter :subject
+#  filter :eprimeid
+#  filter :study_id
+#  filter :created_by  
+
+form do |f|
+  f.semantic_errors
+  f.inputs  do    
+    f.input :subject, :label => "Subject ID"
+    f.input :study_id, :label => "Study ID"
+    f.input :eprimeid
+    f.input :comments
+    f.input :created_by
+  end
+  f.actions         # adds the 'Submit' and 'Cancel' buttons 
+  end
+end
+
+

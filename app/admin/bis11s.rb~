@@ -1,0 +1,18 @@
+ActiveAdmin.register Bis11 do
+
+  # See permitted parameters documentation:
+  # https://github.com/activeadmin/activeadmin/blob/master/docs/2-resource-customization.md#setting-up-strong-parameters
+  #
+  # Uncomment all parameters which should be permitted for assignment
+  #
+  # permit_params :subject_id, :date, :visit_num, :study_id, :bis_1, :bis_2, :bis_3, :bis_4, :bis_5, :bis_6, :bis_7, :bis_8, :bis_9, :bis_10, :bis_11, :bis_12, :bis_13, :bis_14, :bis_15, :bis_16, :bis_17, :bis_18, :bis_19, :bis_20, :bis_21, :bis_22, :bis_23, :bis_24, :bis_25, :bis_26, :bis_27, :bis_28, :bis_29, :bis_30, :administrator, :verified_by
+  #
+  # or
+  #
+  # permit_params do
+  #   permitted = [:subject_id, :date, :visit_num, :study_id, :bis_1, :bis_2, :bis_3, :bis_4, :bis_5, :bis_6, :bis_7, :bis_8, :bis_9, :bis_10, :bis_11, :bis_12, :bis_13, :bis_14, :bis_15, :bis_16, :bis_17, :bis_18, :bis_19, :bis_20, :bis_21, :bis_22, :bis_23, :bis_24, :bis_25, :bis_26, :bis_27, :bis_28, :bis_29, :bis_30, :administrator, :verified_by]
+  #   permitted << :other if params[:action] == 'create' && current_user.admin?
+  #   permitted
+  # end
+  
+end

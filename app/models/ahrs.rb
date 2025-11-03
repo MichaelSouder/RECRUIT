@@ -1,0 +1,3 @@
+class Ahrs < ApplicationRecord
+
+end

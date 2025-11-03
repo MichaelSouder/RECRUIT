@@ -1,0 +1,3 @@
+class Biometric < ApplicationRecord
+
+end

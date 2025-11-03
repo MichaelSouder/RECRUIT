@@ -1,0 +1,4 @@
+class Subject < ActiveRecord::Base
+  establish_connection(:dvbicpmr)
+  self.table_name = "subjects"
+end

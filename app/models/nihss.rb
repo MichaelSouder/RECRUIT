@@ -1,0 +1,6 @@
+class Nihss < ApplicationRecord
+    self.table_name = 'nih_neuro_qol_ss'
+
+    belongs_to :subject
+
+end

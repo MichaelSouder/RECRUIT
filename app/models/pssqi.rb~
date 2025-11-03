@@ -1,0 +1,3 @@
+class Pssqi < ApplicationRecord
+  self.table_name = 'pssqi_raw'
+end

@@ -1,0 +1,5 @@
+class Grid < ActiveRecord::Base
+    establish_connection(:arc)
+    self.table_name = "subj_list"
+    self.primary_key = "grid"
+end
