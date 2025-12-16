@@ -4,7 +4,7 @@ This directory contains comprehensive planning documents for refactoring the REC
 
 ## Document Overview
 
-### 📋 [01-refactoring-plan.md](./01-refactoring-plan.md)
+### [01-refactoring-plan.md](./01-refactoring-plan.md)
 **Main refactoring plan and roadmap**
 - Current state analysis
 - Refactoring goals and objectives
@@ -15,7 +15,7 @@ This directory contains comprehensive planning documents for refactoring the REC
 
 **Start here** for an overview of the entire refactoring project.
 
-### 🏗️ [02-architecture-design.md](./02-architecture-design.md)
+### [02-architecture-design.md](./02-architecture-design.md)
 **System architecture and design**
 - High-level architecture diagrams
 - Backend architecture (FastAPI)
@@ -27,7 +27,7 @@ This directory contains comprehensive planning documents for refactoring the REC
 
 **Read this** to understand the technical architecture and design decisions.
 
-### 🛠️ [03-technology-stack.md](./03-technology-stack.md)
+### [03-technology-stack.md](./03-technology-stack.md)
 **Complete technology stack specification**
 - Backend technologies (FastAPI, SQLAlchemy, PostgreSQL, etc.)
 - Frontend technologies (React, TypeScript, Tailwind, etc.)
@@ -38,7 +38,7 @@ This directory contains comprehensive planning documents for refactoring the REC
 
 **Reference this** when setting up the development environment or making technology choices.
 
-### 🔄 [04-migration-strategy.md](./04-migration-strategy.md)
+### [04-migration-strategy.md](./04-migration-strategy.md)
 **Data migration strategy and procedures**
 - Pre-migration analysis checklist
 - Migration phases and timeline
@@ -50,7 +50,7 @@ This directory contains comprehensive planning documents for refactoring the REC
 
 **Follow this** when executing the data migration from Rails to the new platform.
 
-### 📁 [05-project-structure.md](./05-project-structure.md)
+### [05-project-structure.md](./05-project-structure.md)
 **Complete project structure definition**
 - Root directory layout
 - Backend directory structure
