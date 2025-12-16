@@ -1,0 +1,16 @@
+# Example override file for local development
+# Copy this to docker-compose.override.yml and customize
+
+services:
+  backend:
+    environment:
+      - SECRET_KEY=your-local-secret-key
+      - DEBUG=true
+    # Uncomment to use SQLite instead of PostgreSQL
+    # environment:
+    #   - DATABASE_URL=sqlite:///../recruit.db
+
+  frontend:
+    environment:
+      - VITE_API_URL=http://localhost:8000
+
