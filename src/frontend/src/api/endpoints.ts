@@ -104,4 +104,3 @@ export const auditApi = {
     action?: string;
   }) => apiClient.get('/api/v1/audit/export', { params, responseType: 'blob' }),
 };
-

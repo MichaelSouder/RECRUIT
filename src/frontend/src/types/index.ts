@@ -111,4 +111,3 @@ export interface AuditLog {
   additional_context: string | null;
   created_at: string;
 }
-
