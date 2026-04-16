@@ -19,7 +19,19 @@ Tarballs are **large** (often 1–2+ GB total) and are **not committed**. `outpu
 
 ## How to get the files
 
-### Option A — GitHub Actions (two artifacts — download **both**)
+### Option A — Manual `docker pull` / `podman pull` (with network)
+
+If you can reach the internet, pull all four images from the registries directly—no zip download. See **`docs/MANUAL_PULL.md`** or run:
+
+```bash
+export IMAGE_PREFIX=ghcr.io/yourgithubuser
+chmod +x scripts/pull-all-images.sh
+./scripts/pull-all-images.sh
+```
+
+(Log in to `ghcr.io` first if your app images are private.)
+
+### Option B — GitHub Actions (two artifacts — download **both**)
 
 1. **Actions** → **Export container images** → **Run workflow**.
 2. When the run finishes, open it → **Artifacts**. Download **both**:
@@ -30,7 +42,7 @@ Tarballs are **large** (often 1–2+ GB total) and are **not committed**. `outpu
 
 If you only download the app artifact, you will **not** have Postgres or Redis — you need **both** artifacts (or a full local export).
 
-### Option B — Generate locally (all four in one folder)
+### Option C — Generate locally (all four in one folder)
 
 ```bash
 chmod +x scripts/export-container-images.sh

@@ -49,9 +49,11 @@ podman volume create recruit_postgres_data
 
 ## 4. Pull application images
 
-If you **cannot pull from GHCR** (air-gapped host), load images from the offline bundle first: see **`output/README.md`**. You need **all four** images (Postgres, Redis, backend, frontend). From GitHub Actions, download **both** artifacts **`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**, merge the `.tar` files into one folder, then run `./scripts/load-container-images.sh`.
+**Manual pull (recommended when you have network):** see **`docs/MANUAL_PULL.md`** or run `./scripts/pull-all-images.sh` with `IMAGE_PREFIX` set—same four images, copy-paste commands for Docker/Podman and GHCR login.
 
-Otherwise:
+If you **cannot pull** (air-gapped host), load from disk: **`output/README.md`**. You need **all four** images. From GitHub Actions, download **both** artifacts **`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**, merge the `.tar` files into one folder, then run `./scripts/load-container-images.sh`.
+
+Otherwise, pull by hand:
 
 ```bash
 podman pull ${IMAGE_PREFIX}/recruit-backend:${TAG}
