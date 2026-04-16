@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # Application
     debug: bool = True
     environment: str = "development"
+
+    # First boot (e.g. docker-compose.prod): create a single admin if users table is empty
+    seed_initial_admin: bool = False
+    initial_admin_email: str = "admin@example.com"
+    initial_admin_password: Optional[str] = None
     
     class Config:
         env_file = ".env"

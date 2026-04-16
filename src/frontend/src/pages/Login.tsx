@@ -83,7 +83,7 @@ export const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="admin@recruit.com"
+              placeholder={import.meta.env.PROD ? 'you@example.com' : 'admin@recruit.com'}
             />
             <Input
               label="Password"
@@ -91,7 +91,7 @@ export const Login: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="admin123"
+              placeholder={import.meta.env.PROD ? 'Password' : 'admin123'}
             />
           </div>
           <div className="space-y-3">
@@ -117,20 +117,22 @@ export const Login: React.FC = () => {
               <span>Login with PIV</span>
             </Button>
           </div>
-          <div className="text-sm text-gray-600 text-center bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="font-semibold text-blue-900 mb-2">Test Credentials:</p>
-            <div className="space-y-1 text-left">
-              <p className="font-mono text-xs">
-                <span className="font-semibold">Admin:</span> admin@recruit.com / admin123
-              </p>
-              <p className="font-mono text-xs">
-                <span className="font-semibold">Researcher:</span> researcher1@recruit.com / password123
-              </p>
-              <p className="font-mono text-xs">
-                <span className="font-semibold">Viewer:</span> viewer1@recruit.com / password123
-              </p>
+          {!import.meta.env.PROD && (
+            <div className="text-sm text-gray-600 text-center bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="font-semibold text-blue-900 mb-2">Test Credentials:</p>
+              <div className="space-y-1 text-left">
+                <p className="font-mono text-xs">
+                  <span className="font-semibold">Admin:</span> admin@recruit.com / admin123
+                </p>
+                <p className="font-mono text-xs">
+                  <span className="font-semibold">Researcher:</span> researcher1@recruit.com / password123
+                </p>
+                <p className="font-mono text-xs">
+                  <span className="font-semibold">Viewer:</span> viewer1@recruit.com / password123
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </form>
       </div>
     </div>

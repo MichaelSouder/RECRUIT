@@ -653,10 +653,4 @@ Comprehensive planning documents are available in the `plans/` directory:
 
 [Add your license information here]
 
-## Support
-
-For issues, questions, or contributions, please refer to the project's issue tracker or contact the development team.
-
----
-
-*Last Updated: 2024*
+## SupportFor issues, questions, or contributions, please refer to the project's issue tracker or contact the development team.---*Last Updated: 2024*

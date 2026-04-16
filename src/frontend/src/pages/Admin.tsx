@@ -485,7 +485,7 @@ export const Admin: React.FC = () => {
 
           {activeTab === 'assessment-types' && (
             <div>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <div className="flex flex-col items-start gap-4 mb-6">
                 <h2 className="text-2xl font-semibold text-gray-900">Assessment Types</h2>
                 <Button 
                   onClick={() => { setEditingAssessmentType(null); setShowAssessmentTypeForm(true); }}

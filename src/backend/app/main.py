@@ -1,13 +1,24 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import auth, subjects, studies, session_notes, assessments, assessment_types, admin, audit
 from app.middleware.audit_middleware import AuditMiddleware
 from app.config import settings
+from app.startup_seed import seed_initial_admin_if_configured
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    seed_initial_admin_if_configured()
+    yield
+
 
 app = FastAPI(
     title="RECRUIT Platform API",
     description="Clinical research data management platform",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware
