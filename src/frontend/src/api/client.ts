@@ -1,6 +1,19 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+/** Same-origin API under path base + /api (e.g. /recruit/api) unless VITE_API_URL is set. */
+function resolveApiBaseUrl(): string {
+  const explicit = import.meta.env.VITE_API_URL?.trim();
+  if (explicit) {
+    return explicit.replace(/\/$/, '');
+  }
+  const basePath = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+  if (typeof window === 'undefined') {
+    return basePath ? `http://localhost:8000${basePath}` : 'http://localhost:8000';
+  }
+  return basePath ? `${window.location.origin}${basePath}` : window.location.origin;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -30,7 +43,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // Unauthorized - clear token and redirect to login
       localStorage.removeItem('access_token');
-      window.location.href = '/login';
+      window.location.href = `${import.meta.env.BASE_URL}login`;
     }
     return Promise.reject(error);
   }

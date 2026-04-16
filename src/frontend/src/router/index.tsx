@@ -24,6 +24,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const routerBasename =
+  import.meta.env.BASE_URL === '/' ? undefined : import.meta.env.BASE_URL.replace(/\/$/, '');
+
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -107,5 +110,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+], routerBasename ? { basename: routerBasename } : undefined);
 

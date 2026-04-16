@@ -89,7 +89,10 @@ services:
       context: ./src/frontend
       dockerfile: Dockerfile
       args:
+        VITE_BASE_PATH: /
         VITE_API_URL: http://localhost:18000
+        NGINX_CONFIG: default
+        HEALTH_URI: /health
     container_name: recruit_frontend
     environment:
       - VITE_API_URL=http://localhost:18000

@@ -44,7 +44,7 @@
 
 ### Configuration Files
 
-1. **src/frontend/nginx.conf** - Nginx configuration
+1. **src/frontend/nginx/** - Nginx configuration (`default.conf` for site root, `recruit.conf` for `/recruit/` subpath)
    - SPA routing support
    - API proxy to backend
    - Gzip compression
