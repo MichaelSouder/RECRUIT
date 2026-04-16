@@ -1,0 +1,41 @@
+# Builds/pulls all images needed for production and uploads them as a downloadable artifact.
+# Does not store large binaries in git — download from the workflow run’s Artifacts section.
+
+name: Export container images
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_TAG: latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set IMAGE_PREFIX (GHCR, lowercase)
+        run: |
+          p=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_PREFIX=ghcr.io/${p}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Export images to output/container-images
+        run: |
+          chmod +x scripts/export-container-images.sh
+          ./scripts/export-container-images.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recruit-container-images
+          path: output/container-images/
+          if-no-files-found: error
+          retention-days: 30
