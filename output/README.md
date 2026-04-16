@@ -1,24 +1,36 @@
-# Offline container images
+# Offline container images (air-gapped deploy)
 
-This folder is where **`scripts/export-container-images.sh`** writes **`.tar`** archives of every image needed to run the production stack (Postgres, Redis, backend, frontend).
+This folder is where **`scripts/export-container-images.sh`** writes **`.tar`** archives. A full deployment needs **four** images — **PostgreSQL**, **Redis**, **recruit-backend**, and **recruit-frontend**.
+
+## What is included (all four are required)
+
+| # | File | Image | Source |
+|---|------|--------|--------|
+| 1 | `postgres-15.tar` | `postgres:15` | Docker Hub |
+| 2 | `redis-7-alpine.tar` | `redis:7-alpine` | Docker Hub |
+| 3 | `recruit-backend.tar` | `ghcr.io/your-user/recruit-backend:latest` | Built from this repo |
+| 4 | `recruit-frontend.tar` | `ghcr.io/your-user/recruit-frontend:latest` | Built from this repo |
+
+**Note:** GitHub Container Registry (Packages) only shows the **two RECRUIT app** images. **Postgres and Redis are not published to GHCR** — they only appear in this offline export (or in the CI artifacts below).
 
 ## Why this folder is usually empty in git
 
-Image tarballs are **large** (often 1–2+ GB total) and are **not committed** to the repository. They are listed in `.gitignore`.
+Tarballs are **large** (often 1–2+ GB total) and are **not committed**. `output/container-images/` is gitignored.
 
 ## How to get the files
 
-### Option A — GitHub Actions (recommended)
+### Option A — GitHub Actions (two artifacts — download **both**)
 
-1. Open the repository on GitHub → **Actions**.
-2. Run the workflow **“Export container images”** (**Run workflow**).
-3. When it finishes, open the run → **Artifacts** → download **`recruit-container-images`**.
+1. **Actions** → **Export container images** → **Run workflow**.
+2. When the run finishes, open it → **Artifacts**. Download **both**:
+   - **`recruit-infra-postgres-redis`** — contains **Postgres** and **Redis** `.tar` files plus `README-AIR-GAP.txt`
+   - **`recruit-app-backend-frontend`** — contains **backend** and **frontend** `.tar` files, `MANIFEST.txt`, and `README-AIR-GAP.txt`
+3. Unzip both into **one** folder (e.g. `output/container-images/`) so all **four** `.tar` files sit together.
+4. Run **`./scripts/load-container-images.sh`** on that folder (see below).
 
-Unzip the artifact; you will have `postgres-15.tar`, `redis-7-alpine.tar`, `recruit-backend.tar`, `recruit-frontend.tar`, and `MANIFEST.txt` in `output/container-images/` (or the layout described in the workflow).
+If you only download the app artifact, you will **not** have Postgres or Redis — you need **both** artifacts (or a full local export).
 
-### Option B — Generate locally
-
-From the repo root (Docker or Podman installed):
+### Option B — Generate locally (all four in one folder)
 
 ```bash
 chmod +x scripts/export-container-images.sh
@@ -33,13 +45,15 @@ export IMAGE_TAG=latest
 ./scripts/export-container-images.sh
 ```
 
-Output path defaults to **`output/container-images/`** (override with `OUTPUT_DIR`).
+Output defaults to **`output/container-images/`** (`OUTPUT_DIR` overrides).
 
-## Load images on the target machine
+## Load on the air-gapped machine
+
+Put all **four** `.tar` files in one directory, then:
 
 ```bash
 chmod +x scripts/load-container-images.sh
-./scripts/load-container-images.sh output/container-images
+./scripts/load-container-images.sh /path/to/that/directory
 ```
 
-Then deploy with Podman or Docker using the same image names as in `docker-compose.prod.yml` and `docs/DEPLOY_PODMAN.md`.
+Then deploy with Podman/Docker per `docs/DEPLOY_PODMAN.md` and `docker-compose.prod.yml`.

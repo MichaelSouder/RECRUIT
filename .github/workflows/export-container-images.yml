@@ -32,10 +32,34 @@ jobs:
           chmod +x scripts/export-container-images.sh
           ./scripts/export-container-images.sh
 
-      - name: Upload artifact
+      - name: List exported files (verify Postgres + Redis + app images)
+        run: |
+          ls -la output/container-images/
+          test -f output/container-images/postgres-15.tar
+          test -f output/container-images/redis-7-alpine.tar
+          test -f output/container-images/recruit-backend.tar
+          test -f output/container-images/recruit-frontend.tar
+
+      # Split into two artifacts so Postgres/Redis are clearly visible and to reduce single-zip size limits.
+      - name: Upload artifact — Postgres & Redis (infrastructure)
         uses: actions/upload-artifact@v4
         with:
-          name: recruit-container-images
-          path: output/container-images/
+          name: recruit-infra-postgres-redis
+          path: |
+            output/container-images/postgres-15.tar
+            output/container-images/redis-7-alpine.tar
+            output/container-images/README-AIR-GAP.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload artifact — RECRUIT backend & frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: recruit-app-backend-frontend
+          path: |
+            output/container-images/recruit-backend.tar
+            output/container-images/recruit-frontend.tar
+            output/container-images/MANIFEST.txt
+            output/container-images/README-AIR-GAP.txt
           if-no-files-found: error
           retention-days: 30
