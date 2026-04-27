@@ -51,7 +51,7 @@ podman volume create recruit_postgres_data
 
 **Manual pull (recommended when you have network):** see **`docs/MANUAL_PULL.md`** or run `./scripts/pull-all-images.sh` with `IMAGE_PREFIX` set—same four images, copy-paste commands for Docker/Podman and GHCR login.
 
-If you **cannot pull** (air-gapped host), load from disk: **`output/README.md`**. You need **all four** images. From GitHub Actions, download **both** artifacts **`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**, merge the `.tar` files into one folder, then run `./scripts/load-container-images.sh`.
+If you **cannot pull** (air-gapped host), follow **`docs/AIRGAP_DEPLOY.md`** (or the copy **`AIRGAP_DEPLOY.md`** next to the `.tar` files after export). You need **all four** images. From GitHub Actions, download **both** artifacts **`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**, merge the `.tar` files into one folder, then run **`load-container-images.sh`** from that folder or **`./scripts/load-container-images.sh`** from the repo.
 
 Otherwise, pull by hand:
 

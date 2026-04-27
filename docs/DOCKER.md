@@ -423,6 +423,7 @@ The Docker setup is designed to work on:
 
 ## Additional Resources
 
+- **Air-gapped production (no Compose, no registry on target):** **`docs/AIRGAP_DEPLOY.md`**
 - [Docker Documentation](https://docs.docker.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [FastAPI Deployment](https://fastapi.tiangolo.com/deployment/)

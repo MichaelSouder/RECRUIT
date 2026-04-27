@@ -2,6 +2,10 @@
 
 This folder is where **`scripts/export-container-images.sh`** writes **`.tar`** archives. A full deployment needs **four** images — **PostgreSQL**, **Redis**, **recruit-backend**, and **recruit-frontend**.
 
+**Primary guide:** **`docs/AIRGAP_DEPLOY.md`** (end-to-end: bundle, transfer, load, `docker run` / `podman run`, verification). Each export also copies that file into **`output/container-images/AIRGAP_DEPLOY.md`** together with **`load-container-images.sh`** so the transfer folder is self-contained.
+
+**If you clone this repository:** the `*.tar` files under `output/container-images/` are stored with **Git LFS**. Install [Git LFS](https://git-lfs.com/), run `git lfs install` once, then `git lfs pull` (or clone with a client that supports LFS) so the archives are real files, not tiny pointer stubs.
+
 ## What is included (all four are required)
 
 | # | File | Image | Source |

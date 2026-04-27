@@ -1,0 +1,26 @@
+RECRUIT container image export
+Generated: 2026-04-27T19:28:33Z
+IMAGE_PREFIX=ghcr.io/michaelsouder
+IMAGE_TAG=latest
+
+Required files (all four — Postgres & Redis are NOT in GHCR; they ship only in this export):
+  postgres-15.tar
+  redis-7-alpine.tar
+  recruit-backend.tar
+  recruit-frontend.tar
+
+Bundled documentation (same folder after export):
+  AIRGAP_DEPLOY.md
+  load-container-images.sh
+  README-AIR-GAP.txt
+
+Load on an offline machine (requires docker or podman):
+  for f in postgres-15.tar redis-7-alpine.tar recruit-backend.tar recruit-frontend.tar; do
+    docker load -i "$f"
+  done
+
+Image references after load:
+  postgres:15
+  redis:7-alpine
+  ghcr.io/michaelsouder/recruit-backend:latest
+  ghcr.io/michaelsouder/recruit-frontend:latest

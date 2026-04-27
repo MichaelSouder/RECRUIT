@@ -39,6 +39,9 @@ jobs:
           test -f output/container-images/redis-7-alpine.tar
           test -f output/container-images/recruit-backend.tar
           test -f output/container-images/recruit-frontend.tar
+          test -f output/container-images/AIRGAP_DEPLOY.md
+          test -f output/container-images/load-container-images.sh
+          test -x output/container-images/load-container-images.sh
 
       # Split into two artifacts so Postgres/Redis are clearly visible and to reduce single-zip size limits.
       - name: Upload artifact — Postgres & Redis (infrastructure)
@@ -49,6 +52,8 @@ jobs:
             output/container-images/postgres-15.tar
             output/container-images/redis-7-alpine.tar
             output/container-images/README-AIR-GAP.txt
+            output/container-images/AIRGAP_DEPLOY.md
+            output/container-images/load-container-images.sh
           if-no-files-found: error
           retention-days: 30
 
@@ -61,5 +66,7 @@ jobs:
             output/container-images/recruit-frontend.tar
             output/container-images/MANIFEST.txt
             output/container-images/README-AIR-GAP.txt
+            output/container-images/AIRGAP_DEPLOY.md
+            output/container-images/load-container-images.sh
           if-no-files-found: error
           retention-days: 30

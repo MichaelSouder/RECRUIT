@@ -576,6 +576,10 @@ To remove volumes (this will delete all data):
 docker-compose down -v
 ```
 
+### Air-gapped production
+
+Export all container images and deploy without Compose or registry access on the target host: **`docs/AIRGAP_DEPLOY.md`**. On a connected machine with Docker running, run **`./scripts/export-container-images.sh`** (output under **`output/container-images/`**, gitignored).
+
 ## Troubleshooting
 
 ### Backend Issues
