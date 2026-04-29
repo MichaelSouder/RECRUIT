@@ -13,7 +13,7 @@ This guide is for hosts that **cannot** use Docker Compose, **cannot** pull from
 | `recruit-backend.tar` | See **`MANIFEST.txt`** (e.g. `ghcr.io/yourorg/recruit-backend:TAG`) |
 | `recruit-frontend.tar` | See **`MANIFEST.txt`** |
 
-Optional helpers in the same folder (if produced by export): **`load-container-images.sh`**, this file as **`AIRGAP_DEPLOY.md`**.
+Optional helpers in the same folder (if produced by export): **`load-container-images.sh`**, **`airgap-stack-up.sh`** (starts the stack after images are loaded), this file as **`AIRGAP_DEPLOY.md`**.
 
 **All four** `.tar` files are required. If you used GitHub Actions, you must merge **both** artifacts (**`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**) into one directory—downloading only the app pair leaves you without Postgres and Redis.
 
@@ -73,6 +73,21 @@ done
 ```
 
 Confirm the image names match **`MANIFEST.txt`**.
+
+### 5b. Start the stack with the helper script (optional)
+
+After **`load-container-images.sh`**, you can bring up Postgres, Redis, backend, and frontend in one step (same behavior as sections 6–13 below):
+
+```bash
+export SECRET_KEY='your-long-random-secret'
+export INITIAL_ADMIN_PASSWORD='your-first-admin-password'
+export CORS_ORIGINS='http://your-server:18080'   # comma-separated origins: scheme + host + port, no path
+
+chmod +x ./airgap-stack-up.sh
+./airgap-stack-up.sh .
+```
+
+Use **`./airgap-stack-up.sh --help`** for ports, image overrides (`POSTGRES_IMAGE` if Podman shows `docker.io/library/postgres:15`), **`--dry-run`**, and **`--recreate-app`** (removes only **backend** and **frontend** containers, then recreates them).
 
 ## 6. Set image variables
 
