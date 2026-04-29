@@ -44,6 +44,7 @@ jobs:
           test -x output/container-images/load-container-images.sh
           test -f output/container-images/airgap-stack-up.sh
           test -x output/container-images/airgap-stack-up.sh
+          test -f output/container-images/recruit-airgap.env.example
 
       # Split into two artifacts so Postgres/Redis are clearly visible and to reduce single-zip size limits.
       - name: Upload artifact — Postgres & Redis (infrastructure)
@@ -57,6 +58,7 @@ jobs:
             output/container-images/AIRGAP_DEPLOY.md
             output/container-images/load-container-images.sh
             output/container-images/airgap-stack-up.sh
+            output/container-images/recruit-airgap.env.example
           if-no-files-found: error
           retention-days: 30
 
@@ -72,5 +74,6 @@ jobs:
             output/container-images/AIRGAP_DEPLOY.md
             output/container-images/load-container-images.sh
             output/container-images/airgap-stack-up.sh
+            output/container-images/recruit-airgap.env.example
           if-no-files-found: error
           retention-days: 30

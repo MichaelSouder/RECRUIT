@@ -140,3 +140,6 @@ coverage/
 *.orig
 .cache/
 
+# Local air-gap secrets (never commit)
+recruit-airgap.env
+

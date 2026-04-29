@@ -3,11 +3,10 @@
 # Reads IMAGE_PREFIX / IMAGE_TAG from MANIFEST.txt in the bundle directory unless overridden.
 #
 # Usage:
-#   export SECRET_KEY='...'
-#   export INITIAL_ADMIN_PASSWORD='...'
-#   export CORS_ORIGINS='http://your-server:18080'   # comma-separated, no path
-#   ./scripts/airgap-stack-up.sh /path/to/container-images
-#   ./airgap-stack-up.sh .    # from bundle directory
+#   cp recruit-airgap.env.example recruit-airgap.env   # in bundle dir; edit secrets
+#   ./airgap-stack-up.sh .
+# Or export variables in the shell; shell overrides recruit-airgap.env.
+# Optional: --env-file /path/to/custom.env
 
 set -euo pipefail
 
@@ -32,7 +31,14 @@ airgap-stack-up.sh — start RECRUIT containers after images are loaded (Podman/
 Options:
   --dry-run              Print actions only (no docker/podman changes).
   --recreate-app         Remove backend and frontend containers if present, then start fresh.
+  --env-file PATH        Load KEY=value pairs from this file (must exist).
   -h, --help             Show this help.
+
+Environment file (optional):
+  If recruit-airgap.env exists in the bundle directory (next to MANIFEST.txt), it is
+  loaded automatically. Copy recruit-airgap.env.example to recruit-airgap.env and edit.
+  Variables already exported in the shell are NOT overwritten by the file.
+  RECRUIT_ENV_FILE may be set instead of --env-file (same precedence as --env-file).
 
 Required environment (unless noted):
   SECRET_KEY             Long random string for JWT signing.
@@ -74,11 +80,21 @@ EOF
 DRY_RUN=0
 RECREATE_APP=0
 BUNDLE_DIR=""
+ENV_FILE_OPT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run)       DRY_RUN=1; shift ;;
     --recreate-app)  RECREATE_APP=1; shift ;;
+    --env-file)
+      shift
+      if [[ $# -eq 0 ]]; then
+        log_err "--env-file requires a path"
+        exit 2
+      fi
+      ENV_FILE_OPT="$1"
+      shift
+      ;;
     -h|--help)       usage; exit 0 ;;
     -*)
       log_err "Unknown option: $1"
@@ -105,6 +121,86 @@ run() {
     return 0
   fi
   "$@"
+}
+
+# Resolve relative path to absolute (POSIX dirname/basename).
+abs_path() {
+  local p="$1"
+  if [[ "$p" == /* ]]; then
+    printf '%s\n' "$p"
+    return
+  fi
+  local d b
+  d="$(dirname -- "$p")"
+  b="$(basename -- "$p")"
+  printf '%s/%s\n' "$(cd -- "$d" && pwd)" "$b"
+}
+
+# Load KEY=value from file. Skips blank lines and # comments. Optional leading "export ".
+# Strips one matching pair of surrounding ' or " on values.
+# Does not override variables already set in the environment (before this runs).
+load_env_file() {
+  local file="$1"
+  local line key val applied fc lc had_extglob
+  applied=0
+  if [[ ! -f "$file" ]]; then
+    log_err "Env file not found: $file"
+    exit 1
+  fi
+  had_extglob=0
+  shopt -q extglob && had_extglob=1
+  shopt -s extglob
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ ! "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      log_warn "Skipping malformed env line: ${line:0:72}"
+      continue
+    fi
+    key="${BASH_REMATCH[2]}"
+    val="${BASH_REMATCH[3]}"
+    val="${val##+([[:space:]])}"
+    val="${val%%+([[:space:]])}"
+    if ((${#val} >= 2)); then
+      fc="${val:0:1}"
+      lc="${val: -1}"
+      if [[ "$fc" == '"' && "$lc" == '"' ]] || [[ "$fc" == "'" && "$lc" == "'" ]]; then
+        val="${val:1:-1}"
+      fi
+    fi
+    if [[ -n ${!key+x} ]]; then
+      continue
+    fi
+    printf -v "$key" '%s' "$val"
+    export "$key"
+    ((++applied)) || true
+  done < "$file"
+  if [[ "$had_extglob" == 0 ]]; then
+    shopt -u extglob
+  fi
+  log_ok "Loaded env file: $file (${applied} variable(s) applied; existing shell vars kept)."
+}
+
+resolve_and_load_env() {
+  local chosen="" src
+  if [[ -n "$ENV_FILE_OPT" ]]; then
+    chosen="$(abs_path "$ENV_FILE_OPT")"
+    load_env_file "$chosen"
+    return
+  fi
+  if [[ -n "${RECRUIT_ENV_FILE:-}" ]]; then
+    chosen="$(abs_path "$RECRUIT_ENV_FILE")"
+    load_env_file "$chosen"
+    return
+  fi
+  src="$BUNDLE_DIR/recruit-airgap.env"
+  if [[ -f "$src" ]]; then
+    load_env_file "$src"
+    return
+  fi
+  log_info "No env file loaded (optional). Create $src or use --env-file / RECRUIT_ENV_FILE."
+  log_info "Template: recruit-airgap.env.example in the same folder (from export) or scripts/ in the repo."
 }
 
 manifest_get() {
@@ -169,7 +265,8 @@ require_images() {
 
 require_secrets() {
   if [[ -z "${SECRET_KEY:-}" ]]; then
-    log_err "SECRET_KEY is not set. Example: export SECRET_KEY=\$(openssl rand -hex 32)"
+    log_err "SECRET_KEY is not set. Add it to recruit-airgap.env in the bundle directory or export it."
+    log_info "Example: openssl rand -hex 32"
     exit 1
   fi
   if ((${#SECRET_KEY} < 16)); then
@@ -178,7 +275,7 @@ require_secrets() {
   fi
   if [[ "${SEED_INITIAL_ADMIN:-true}" == "true" ]] || [[ "${SEED_INITIAL_ADMIN:-true}" == "1" ]]; then
     if [[ -z "${INITIAL_ADMIN_PASSWORD:-}" ]]; then
-      log_err "INITIAL_ADMIN_PASSWORD is not set (required when SEED_INITIAL_ADMIN is true)."
+      log_err "INITIAL_ADMIN_PASSWORD is not set (required when SEED_INITIAL_ADMIN is true). Set it in recruit-airgap.env or export it."
       exit 1
     fi
     if ((${#INITIAL_ADMIN_PASSWORD} < 8)); then
@@ -231,6 +328,8 @@ if [[ ! -f "$MANIFEST_FILE" ]]; then
   log_info "Pass the directory that contains MANIFEST.txt (same folder as the .tar files)."
   exit 1
 fi
+
+resolve_and_load_env
 
 pick_engine
 
