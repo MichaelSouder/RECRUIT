@@ -1,6 +1,13 @@
 # Air-gapped deployment (RECRUIT)
 
-This guide is for hosts that **cannot** use Docker Compose, **cannot** pull from container registries, and **cannot** clone Git. You run **four** containers with plain **`docker run`** or **`podman run`**.
+This guide is for hosts that **cannot** use Docker Compose, **cannot** pull from container registries, and **cannot** clone Git. You run containers with plain **`docker run`** or **`podman run`**.
+
+**Two layouts:**
+
+| Layout | Postgres | Containers |
+|--------|----------|------------|
+| **Bundled DB** (default in older steps below) | Postgres **in** a container | Postgres, Redis, backend, frontend (**four**) |
+| **Host DB** (typical on RHEL with system PostgreSQL) | Postgres on the **host** | Redis, backend, frontend (**three**) — set **`USE_HOST_POSTGRES=true`** in **`recruit-airgap.env`** and use **`airgap-stack-up.sh`** (see §5c) |
 
 **Production URL layout:** the UI is at **`http://your-host:18080/recruit/`**. The browser talks to the API on the **same origin** under **`/recruit/api/`** (nginx in the frontend container proxies to the backend). You do **not** set `VITE_API_URL` on the shipped frontend image.
 
@@ -15,7 +22,7 @@ This guide is for hosts that **cannot** use Docker Compose, **cannot** pull from
 
 Optional helpers in the same folder (if produced by export): **`load-container-images.sh`**, **`airgap-stack-up.sh`** (starts the stack after images are loaded), **`recruit-airgap.env.example`** (copy to **`recruit-airgap.env`** and edit), this file as **`AIRGAP_DEPLOY.md`**.
 
-**All four** `.tar` files are required. If you used GitHub Actions, you must merge **both** artifacts (**`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**) into one directory—downloading only the app pair leaves you without Postgres and Redis.
+**Image tars:** For the **bundled** Postgres layout, **all four** `.tar` files are required. For **host Postgres**, you only need **Redis + backend + frontend** tars (you can still load the Postgres tar; it is unused). If you used GitHub Actions, merge **both** artifacts into one folder for a full bundle, or download only what you need plus **`MANIFEST.txt`** and helper scripts.
 
 ## 2. How to obtain this bundle (connected machine)
 
@@ -99,6 +106,23 @@ export CORS_ORIGINS='http://your-server:18080'   # comma-separated: scheme + hos
 
 Use **`./airgap-stack-up.sh --help`** for **`--env-file`**, ports, image overrides (`POSTGRES_IMAGE` if Podman shows `docker.io/library/postgres:15`), **`--dry-run`**, and **`--recreate-app`** (removes only **backend** and **frontend** containers, then recreates them).
 
+### 5c. Host PostgreSQL (three containers)
+
+Use this when PostgreSQL already runs on the machine (not in Docker/Podman). The script starts **Redis**, **backend**, and **frontend** only.
+
+1. Ensure PostgreSQL accepts **TCP** connections from the host and from containers (`listen_addresses`, `pg_hba.conf`). Create the app database and user if needed.
+2. Copy **`recruit-airgap.env.example`** → **`recruit-airgap.env`** and set at least:
+   - **`USE_HOST_POSTGRES=true`**
+   - **`DATABASE_URL`** — must use a hostname the **backend container** can resolve (same as **`POSTGRES_SERVICE_HOST`**). Examples:
+     - **Podman:** `postgresql://USER:PASSWORD@host.containers.internal:5432/DBNAME`
+     - **Docker Desktop:** use **`host.docker.internal`** in both **`DATABASE_URL`** and **`POSTGRES_SERVICE_HOST`**
+     - **Docker on Linux:** `host.docker.internal` is supported if you use **`airgap-stack-up.sh`** (it adds **`--add-host=host.docker.internal:host-gateway`** for the backend), or put the host’s bridge IP in **`DATABASE_URL`**
+   - **`POSTGRES_SERVICE_HOST`** — same host part as in **`DATABASE_URL`**
+   - **`SECRET_KEY`**, **`INITIAL_ADMIN_PASSWORD`**, **`CORS_ORIGINS`**
+3. **`POSTGRES_WAIT_HOST`** / **`POSTGRES_WAIT_PORT`** — where the **script** checks readiness from the host (defaults **`127.0.0.1`** and **`5432`**). If your server listens only on another address, set these to match.
+
+**Why the old flow “stuck waiting for Postgres”:** the helper used **`docker exec postgres pg_isready`**, which only works when a **`postgres`** container exists and is healthy. With host PostgreSQL there is no such container — use **`USE_HOST_POSTGRES=true`** so the script waits on the host socket instead.
+
 ## 6. Set image variables
 
 Read **`MANIFEST.txt`** and export the same prefix and tag the bundle was built with:
@@ -175,6 +199,8 @@ docker run -d \
   --name backend \
   --network recruit_network \
   -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recruit_db \
+  -e PGHOST=postgres \
+  -e PGPORT=5432 \
   -e REDIS_URL=redis://redis:6379/0 \
   -e SECRET_KEY="${SECRET_KEY}" \
   -e ALGORITHM=HS256 \
@@ -190,7 +216,7 @@ docker run -d \
   "${IMAGE_PREFIX}/recruit-backend:${TAG}" \
   sh -c "
     echo 'Waiting for PostgreSQL...' &&
-    until pg_isready -h postgres -U postgres; do sleep 1; done &&
+    until pg_isready -h \"\${PGHOST:-postgres}\" -p \"\${PGPORT:-5432}\" -U postgres; do sleep 1; done &&
     echo 'PostgreSQL is ready!' &&
     echo 'Initializing database...' &&
     python -c 'from app.database import Base, engine; Base.metadata.create_all(bind=engine)' 2>&1 || true &&
@@ -242,7 +268,9 @@ Open in a browser: **`http://YOUR_SERVER:18080/recruit/`** (trailing slash recom
 | `docker load` fails | All four `.tar` files present; enough disk space. |
 | Blank page at `/` | App lives under **`/recruit/`**. |
 | API or CORS errors | **`CORS_ORIGINS`** includes the exact browser origin; use API via **`/recruit/api/`** on the same host as the UI when possible. |
-| Backend exits | **`docker logs backend`**; Postgres reachable at hostname **`postgres`**. |
+| Backend exits | **`docker logs backend`**; DB reachable (container mode: hostname **`postgres`**; host mode: **`DATABASE_URL`** / **`POSTGRES_SERVICE_HOST`**). |
+| **`airgap-stack-up.sh` stuck on Postgres** | With **host** Postgres, set **`USE_HOST_POSTGRES=true`** and **`POSTGRES_WAIT_*`** so the script does not **`exec`** a missing **`postgres`** container. With **bundled** Postgres, check **`docker logs postgres`**. |
+| Missing images after **`docker load`** | Load and run with the **same** engine (**`DOCKER_CMD=podman`** or **`docker`**). **`airgap-stack-up.sh`** picks the engine that already has the backend image when both are installed. |
 | Name already in use | Remove old container: **`docker rm -f postgres`** (only if you intend to recreate)—**warning:** recreating Postgres without the volume loses DB data unless you know what you are doing. |
 
 ## 17. Related documentation
