@@ -13,6 +13,9 @@ ENV/
 *.sqlite3
 *.db-journal
 
+# DB snapshot PDFs (may contain PHI)
+output/
+
 # Node
 node_modules/
 dist/
@@ -142,4 +145,17 @@ coverage/
 
 # Local air-gap secrets (never commit)
 recruit-airgap.env
+
+# Local Python venv used for one-off tooling (e.g. Alembic with pinned Python)
+src/backend/.venv-migrate/
+
+# Restored PostgreSQL cluster from data/postgres.zip.part* (large; local only)
+data/.postgres-restore/
+
+# Full pg_dump (commit the 7× .partN.gz files under data/backups/ instead)
+data/backups/*.dump
+!data/backups/*.part*.gz
+!data/backups/*.sha256
+!data/backups/assemble_recruit_dump.sh
+!data/backups/README.md
 
