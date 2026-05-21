@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Reassemble recruit_prod_cutover dump from 7 gzip parts + optional SHA-256 check.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=_common.sh
+source "${SCRIPT_DIR}/_common.sh"
+
+BACKUPS_DIR="${BACKUPS_DIR:-${DEFAULT_BACKUPS}}"
+BASE="${DUMP_BASE:-${DEFAULT_DUMP_BASE}}"
+PARTS=7
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+  Reassemble ${BASE}.dump from ${BASE}.part0.gz … part$((PARTS - 1)).gz
+
+Options:
+  --backups-dir DIR   Directory containing part files (default: data/backups)
+  --base NAME         Dump base name without .dump (default: ${DEFAULT_DUMP_BASE})
+  -h, --help          Show this help
+
+Requires: gzip, shasum (or sha256sum)
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --backups-dir) BACKUPS_DIR="$2"; shift 2 ;;
+    --base) BASE="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+need_cmd gunzip awk
+if command -v shasum >/dev/null 2>&1; then
+  SHA_CMD=(shasum -a 256)
+elif command -v sha256sum >/dev/null 2>&1; then
+  SHA_CMD=(sha256sum)
+else
+  echo "Need shasum or sha256sum for checksum verify" >&2
+  exit 1
+fi
+
+OUT="${BACKUPS_DIR}/${BASE}.dump"
+SHA_FILE="${BACKUPS_DIR}/${BASE}.dump.sha256"
+cd "$BACKUPS_DIR"
+
+for i in $(seq 0 $((PARTS - 1))); do
+  [[ -f "${BASE}.part${i}.gz" ]] || {
+    echo "Missing ${BACKUPS_DIR}/${BASE}.part${i}.gz" >&2
+    exit 1
+  }
+done
+
+echo "Assembling ${OUT} ..."
+gunzip -c \
+  "${BASE}.part0.gz" "${BASE}.part1.gz" "${BASE}.part2.gz" \
+  "${BASE}.part3.gz" "${BASE}.part4.gz" "${BASE}.part5.gz" \
+  "${BASE}.part6.gz" > "${OUT}.tmp"
+mv "${OUT}.tmp" "$OUT"
+
+if [[ -f "$SHA_FILE" ]]; then
+  echo "Checking SHA-256 ..."
+  expected="$(awk '{print $1}' "$SHA_FILE")"
+  actual="$("${SHA_CMD[@]}" "$OUT" | awk '{print $1}')"
+  if [[ "$expected" != "$actual" ]]; then
+    echo "Checksum mismatch!" >&2
+    echo "  expected: $expected" >&2
+    echo "  actual:   $actual" >&2
+    exit 1
+  fi
+  echo "Checksum OK."
+fi
+
+echo "Done: ${OUT}"

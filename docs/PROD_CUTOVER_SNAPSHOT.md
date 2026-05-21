@@ -62,27 +62,39 @@ python -m migrations_cli validate
 python -m migrations_cli deploy-check
 ```
 
-### Verify import on production (no legacy DB)
+### Verify import on production (bash; no legacy DB, no Python)
 
-On the **source** DB before `pg_dump`, refresh the baseline (commit or ship with the dump):
-
-```bash
-cd src/backend
-export DATABASE_URL='postgresql://…/recruit_db'
-python -m migrations_cli migration-verify-baseline
-# writes data/migration_verify_baseline.json
-```
-
-After **`pg_restore`** on prod, with only prod `DATABASE_URL`:
+**Podman one-shot** (assemble parts → copy into container → `pg_restore` → verify):
 
 ```bash
-cd src/backend
-export DATABASE_URL='postgresql://…/recruit_db'
-python -m migrations_cli migration-verify
-python -m migrations_cli deploy-check
+chmod +x scripts/migration/*.sh
+export PODMAN_CONTAINER=postgres    # podman ps — your Postgres container name
+export PGDATABASE=recruit_db
+export PGPASSWORD=postgres
+# If Postgres port is published on the host:
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/recruit_db'
+
+./scripts/migration/prod-restore-podman.sh
 ```
 
-Exit code **0** from `migration-verify` means counts and Alembic head match the baseline (`--tolerance N` if you allow small drift).
+**Step by step:**
+
+```bash
+./scripts/migration/assemble-recruit-dump.sh
+./scripts/migration/prod-restore-podman.sh --container postgres
+./scripts/migration/migration-verify.sh --tolerance 0
+```
+
+Refresh baseline on the source DB before a new dump:
+
+```bash
+export DATABASE_URL='postgresql://…/recruit_db'
+./scripts/migration/migration-verify-baseline.sh
+```
+
+Exit code **0** from `migration-verify.sh` means counts and Alembic head match `data/migration_verify_baseline.json`.
+
+Optional: `python -m migrations_cli migration-verify` still works if Python deps are installed.
 
 Point the **RECRUIT application** `DATABASE_URL` at this instance. Legacy URLs are **not** required at runtime unless you run further ETL on prod.
 

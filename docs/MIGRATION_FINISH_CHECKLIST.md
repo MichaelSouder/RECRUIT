@@ -34,7 +34,7 @@ python -m migrations_cli deploy-check
 
 **Prod dump:** see [PROD_CUTOVER_SNAPSHOT.md](./PROD_CUTOVER_SNAPSHOT.md).
 
-**Prod verify (after restore):** `migration-verify` + `deploy-check` — no legacy URLs.
+**Prod verify (after restore):** `scripts/migration/migration-verify.sh` (bash; Podman or `DATABASE_URL`) — no legacy URLs, no Python.
 
 ---
 
