@@ -19,7 +19,6 @@ from app.models.session_note import SessionNote
 from app.models.assessment import Assessment
 from app.models.assessment_type import AssessmentType
 from app.models.subject_study import subject_study
-from app.models.user_study import user_study
 from app.core.security import get_password_hash
 
 # Import all models to ensure they're registered

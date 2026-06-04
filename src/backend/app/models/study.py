@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, Text, Date, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 from app.models.subject_study import subject_study
-from app.models.user_study import user_study
+from app.models.user_study import UserStudy
 
 
 class Study(BaseModel):
@@ -17,6 +17,7 @@ class Study(BaseModel):
     
     # Relationships
     subjects = relationship("Subject", secondary=subject_study, back_populates="studies")
-    users = relationship("User", secondary=user_study, back_populates="accessible_studies")
+    user_study_links = relationship("UserStudy", back_populates="study")
+    study_procedures = relationship("StudyProcedure", back_populates="study", cascade="all, delete-orphan")
     principal_investigator = relationship("User", foreign_keys=[principal_investigator_id])
 

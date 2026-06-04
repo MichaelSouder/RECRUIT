@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { usersApi, studiesApi, assessmentTypesApi, auditApi } from '../api/endpoints';
-import { User, Study, AssessmentType, AuditLog, PaginatedResponse } from '../types';
+import { User, Study, AssessmentType, AuditLog, PaginatedResponse, UserStudyAccess } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Plus, Edit, Trash2, Users, BookOpen, Settings, X, Eye, FileText, Download, Search, Filter, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, BookOpen, Settings, X, Eye, FileText, Download, Search, Filter, ArrowUp, ArrowDown, Mail, MapPin, Phone, Shield } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
+import { UserFormModal } from '../components/admin/UserFormModal';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -31,6 +32,28 @@ const assessmentTypeSchema = z.object({
 
 type AssessmentTypeFormData = z.infer<typeof assessmentTypeSchema>;
 
+function formatApiError(error: unknown, fallback: string): string {
+  const err = error as {
+    message?: string;
+    response?: { status?: number; data?: { detail?: unknown } };
+  };
+  const status = err.response?.status;
+  const d = err.response?.data?.detail;
+  let detail = fallback;
+  if (typeof d === 'string' && d) detail = d;
+  else if (Array.isArray(d) && d.length)
+    detail = d
+      .map((x) =>
+        typeof x === 'object' && x !== null && 'msg' in x
+          ? String((x as { msg: string }).msg)
+          : JSON.stringify(x),
+      )
+      .join('; ');
+  else if (d != null) detail = JSON.stringify(d);
+  else if (err.message) detail = err.message;
+  return status ? `${detail} (HTTP ${status})` : detail;
+}
+
 export const Admin: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'users' | 'studies' | 'assessment-types' | 'audit-trail'>('users');
   const [users, setUsers] = useState<User[]>([]);
@@ -45,6 +68,13 @@ export const Admin: React.FC = () => {
   const [editingAssessmentType, setEditingAssessmentType] = useState<AssessmentType | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserDetailsModal, setShowUserDetailsModal] = useState(false);
+  const [showStudyAccessModal, setShowStudyAccessModal] = useState(false);
+  const [studyAccessUser, setStudyAccessUser] = useState<User | null>(null);
+  const [userStudies, setUserStudies] = useState<UserStudyAccess[]>([]);
+  const [allStudiesForAccess, setAllStudiesForAccess] = useState<Study[]>([]);
+  const [studyAccessLoading, setStudyAccessLoading] = useState(false);
+  const [studyAccessSavingId, setStudyAccessSavingId] = useState<number | null>(null);
+  const [studyAccessError, setStudyAccessError] = useState<string | null>(null);
   
   // Audit trail state
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -183,6 +213,81 @@ export const Admin: React.FC = () => {
     }
   };
 
+  const openStudyAccessModal = async (user: User) => {
+    setStudyAccessUser(user);
+    setShowStudyAccessModal(true);
+    setStudyAccessError(null);
+    setStudyAccessLoading(true);
+    setUserStudies([]);
+    setAllStudiesForAccess([]);
+    const errs: string[] = [];
+    try {
+      const allRes = await studiesApi.getAll({ limit: 1000 });
+      setAllStudiesForAccess(allRes.data.items ?? []);
+    } catch (error) {
+      console.error('Failed to load studies list:', error);
+      errs.push(`Study directory: ${formatApiError(error, 'request failed')}`);
+      setAllStudiesForAccess([]);
+    }
+    try {
+      const usRes = await usersApi.getStudies(user.id);
+      setUserStudies(usRes.data as UserStudyAccess[]);
+    } catch (error) {
+      console.error('Failed to load user study assignments:', error);
+      errs.push(`User assignments: ${formatApiError(error, 'request failed')}`);
+      setUserStudies([]);
+    }
+    if (errs.length) {
+      setStudyAccessError(errs.join(' · '));
+    }
+    setStudyAccessLoading(false);
+  };
+
+  const closeStudyAccessModal = () => {
+    setShowStudyAccessModal(false);
+    setStudyAccessUser(null);
+    setUserStudies([]);
+    setAllStudiesForAccess([]);
+    setStudyAccessError(null);
+    setStudyAccessSavingId(null);
+  };
+
+  const toggleUserStudyAccess = async (study: Study, grant: boolean) => {
+    if (!studyAccessUser) return;
+    setStudyAccessError(null);
+    setStudyAccessSavingId(study.id);
+    try {
+      if (grant) {
+        await usersApi.addStudies(studyAccessUser.id, [study.id]);
+      } else {
+        await usersApi.removeStudy(studyAccessUser.id, study.id);
+      }
+      const usRes = await usersApi.getStudies(studyAccessUser.id);
+      setUserStudies(usRes.data as UserStudyAccess[]);
+    } catch (error) {
+      console.error('Failed to update study access:', error);
+      setStudyAccessError(formatApiError(error, 'Failed to update study access.'));
+    } finally {
+      setStudyAccessSavingId(null);
+    }
+  };
+
+  const updateUserStudyRole = async (studyId: number, study_role: string) => {
+    if (!studyAccessUser) return;
+    setStudyAccessError(null);
+    setStudyAccessSavingId(studyId);
+    try {
+      await usersApi.patchUserStudyRole(studyAccessUser.id, studyId, study_role);
+      const usRes = await usersApi.getStudies(studyAccessUser.id);
+      setUserStudies(usRes.data as UserStudyAccess[]);
+    } catch (error) {
+      console.error('Failed to update study role:', error);
+      setStudyAccessError(formatApiError(error, 'Failed to update study role.'));
+    } finally {
+      setStudyAccessSavingId(null);
+    }
+  };
+
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'admin':
@@ -283,6 +388,7 @@ export const Admin: React.FC = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Study access</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
@@ -306,6 +412,17 @@ export const Admin: React.FC = () => {
                           }`}>
                             {user.is_active ? 'Active' : 'Inactive'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            type="button"
+                            onClick={() => openStudyAccessModal(user)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                            title="Manage which studies this user can access"
+                          >
+                            <BookOpen className="h-3.5 w-3.5" />
+                            Studies
+                          </button>
                         </td>
                         <td className="px-6 py-4 text-sm font-medium">
                           <div className="flex items-center space-x-2">
@@ -777,24 +894,18 @@ export const Admin: React.FC = () => {
         </>
       )}
 
-      {/* User Form Modal - simplified for now */}
-      {showUserForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">
-              {editingUser ? 'Edit User' : 'Create User'}
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              User form implementation needed. This is a placeholder.
-            </p>
-            <div className="flex justify-end space-x-2">
-              <Button variant="secondary" onClick={() => { setShowUserForm(false); setEditingUser(null); }}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Create / edit user */}
+      <UserFormModal
+        isOpen={showUserForm}
+        user={editingUser}
+        onClose={() => {
+          setShowUserForm(false);
+          setEditingUser(null);
+        }}
+        onSuccess={() => {
+          fetchData();
+        }}
+      />
 
       {/* Assessment Type Form Modal */}
       {showAssessmentTypeForm && (
@@ -812,6 +923,108 @@ export const Admin: React.FC = () => {
         />
       )}
 
+      <Modal
+        isOpen={showStudyAccessModal}
+        onClose={closeStudyAccessModal}
+        title={
+          studyAccessUser
+            ? `Study access — ${studyAccessUser.email}`
+            : 'Study access'
+        }
+        size="lg"
+      >
+        {studyAccessUser ? (
+          <div className="space-y-4">
+            {(studyAccessUser.role === 'admin' || studyAccessUser.is_superuser) && (
+              <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-sm text-blue-900">
+                Administrators can access <strong>all</strong> studies in the system. You can still
+                attach studies here for reporting or future role changes.
+              </div>
+            )}
+            {studyAccessError && (
+              <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-800">
+                {studyAccessError}
+              </div>
+            )}
+            {studyAccessLoading ? (
+              <div className="py-8 text-center text-sm text-gray-500">Loading studies…</div>
+            ) : allStudiesForAccess.length === 0 ? (
+              <p className="text-sm text-gray-500">No studies exist yet. Create studies under the Studies tab first.</p>
+            ) : (
+              <div className="max-h-[min(24rem,55vh)] overflow-y-auto rounded-lg border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr>
+                      <th className="w-12 px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                        Access
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                        Study
+                      </th>
+                      <th className="w-44 px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                        Role on study
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {[...allStudiesForAccess]
+                      .sort((a, b) =>
+                        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+                      )
+                      .map((study) => {
+                        const row = userStudies.find((r) => r.study.id === study.id);
+                        const assigned = !!row;
+                        const busy = studyAccessSavingId === study.id;
+                        return (
+                          <tr key={study.id}>
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                checked={assigned}
+                                disabled={busy}
+                                onChange={(e) =>
+                                  toggleUserStudyAccess(study, e.target.checked)
+                                }
+                                aria-label={`Access to ${study.name}`}
+                              />
+                            </td>
+                            <td className="px-3 py-2 font-medium text-gray-900">{study.name}</td>
+                            <td className="px-3 py-2">
+                              <select
+                                className="block w-full max-w-[11rem] rounded-md border border-gray-300 bg-white py-1.5 pl-2 pr-8 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                                value={row?.study_role ?? 'viewer'}
+                                disabled={!assigned || busy}
+                                aria-label={`Role for ${study.name}`}
+                                onChange={(e) =>
+                                  updateUserStudyRole(study.id, e.target.value)
+                                }
+                              >
+                                <option value="viewer">Viewer</option>
+                                <option value="researcher">Researcher</option>
+                                <option value="admin">Study admin</option>
+                              </select>
+                            </td>
+                            <td className="px-3 py-2 text-gray-600">{study.status}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-xs text-gray-500">
+              Assign studies to control which protocols this account can open. For each study, set{' '}
+              <strong>Role on study</strong> (viewer vs researcher vs study admin). Global app admins still see all
+              studies regardless of this list.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
+
       {/* User Details Modal */}
       <Modal
         isOpen={showUserDetailsModal}
@@ -819,43 +1032,109 @@ export const Admin: React.FC = () => {
           setShowUserDetailsModal(false);
           setSelectedUser(null);
         }}
-        title="User Details"
-        size="md"
+        title={selectedUser ? `Profile — ${selectedUser.email}` : 'User details'}
+        size="lg"
       >
         {selectedUser ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <p className="text-sm text-gray-900">{selectedUser.full_name || '-'}</p>
+          <div className="space-y-6">
+            <div className="-mx-6 -mt-2 flex flex-col gap-4 bg-gradient-to-br from-primary-600 to-primary-800 px-6 py-6 text-white sm:flex-row sm:items-center">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-xl font-bold tracking-tight ring-2 ring-white/25">
+                {(() => {
+                  const u = selectedUser;
+                  const fn = (u.full_name || '').trim();
+                  if (fn) {
+                    const p = fn.split(/\s+/).filter(Boolean);
+                    if (p.length >= 2) return (p[0][0] + p[1][0]).toUpperCase();
+                    return p[0].slice(0, 2).toUpperCase();
+                  }
+                  return (u.email.split('@')[0] || '?').slice(0, 2).toUpperCase();
+                })()}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <p className="text-sm text-gray-900">{selectedUser.email}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-semibold leading-tight">
+                  {selectedUser.full_name || 'No display name'}
+                </p>
+                <a
+                  href={`mailto:${selectedUser.email}`}
+                  className="mt-1 inline-flex items-center gap-1.5 text-sm text-primary-100 hover:text-white"
+                >
+                  <Mail className="h-4 w-4 shrink-0 opacity-90" />
+                  <span className="truncate">{selectedUser.email}</span>
+                </a>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <p className="text-sm text-gray-900">{selectedUser.location || '-'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <p className="text-sm text-gray-900">{selectedUser.phone || '-'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <p className="text-sm text-gray-900">{selectedUser.role || 'viewer'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <p className="text-sm text-gray-900">
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/25">
+                  <Shield className="h-3.5 w-3.5 opacity-90" />
+                  {selectedUser.role || 'viewer'}
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 ring-white/25 ${
+                    selectedUser.is_active ? 'bg-emerald-500/40 text-white' : 'bg-red-500/50 text-white'
+                  }`}
+                >
                   {selectedUser.is_active ? 'Active' : 'Inactive'}
-                </p>
+                </span>
+                {selectedUser.is_superuser && (
+                  <span className="inline-flex rounded-full bg-amber-300/90 px-3 py-1 text-xs font-semibold text-gray-900 ring-1 ring-white/30">
+                    Superuser
+                  </span>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Superuser</label>
-                <p className="text-sm text-gray-900">
-                  {selectedUser.is_superuser ? 'Yes' : 'No'}
-                </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 shadow-sm">
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Location
+                </div>
+                <p className="text-sm text-gray-900">{selectedUser.location || '—'}</p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 shadow-sm">
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Phone className="h-3.5 w-3.5" />
+                  Phone
+                </div>
+                {selectedUser.phone ? (
+                  <a href={`tel:${selectedUser.phone}`} className="text-sm font-medium text-primary-700 hover:underline">
+                    {selectedUser.phone}
+                  </a>
+                ) : (
+                  <p className="text-sm text-gray-900">—</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-gray-500">
+                Use <strong>Edit</strong> from the user list to change credentials or role. Use{' '}
+                <strong>Studies</strong> to assign which protocols this account can work with.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    const u = selectedUser;
+                    setShowUserDetailsModal(false);
+                    setSelectedUser(null);
+                    setEditingUser(u);
+                    setShowUserForm(true);
+                  }}
+                >
+                  Edit user
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const u = selectedUser;
+                    setShowUserDetailsModal(false);
+                    setSelectedUser(null);
+                    if (u) void openStudyAccessModal(u);
+                  }}
+                >
+                  Manage study access
+                </Button>
               </div>
             </div>
           </div>

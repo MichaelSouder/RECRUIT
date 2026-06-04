@@ -15,5 +15,6 @@ GitHub Container Registry only stores the app images; Postgres and Redis are
 included only in the offline export (this bundle / CI artifacts).
 
 Full procedure: read AIRGAP_DEPLOY.md in this folder (copy of docs/AIRGAP_DEPLOY.md).
-Load images: ./load-container-images.sh .   (script is copied here by export)
-Or from repo: ./scripts/load-container-images.sh path/to/folder-with-all-four-tars
+Load images: ./load-container-images.sh .
+Start stack: copy recruit-airgap.env.example to recruit-airgap.env, edit, then ./airgap-stack-up.sh .
+Or from repo: ./scripts/load-container-images.sh /path/to/bundle

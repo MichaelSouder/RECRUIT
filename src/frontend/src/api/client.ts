@@ -1,5 +1,12 @@
 import axios from 'axios';
 
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    /** When set, a 401 on this request does not clear the token or hard-redirect (credential attempts). */
+    skipAuthRedirect?: boolean;
+  }
+}
+
 /** Same-origin API under path base + /api (e.g. /recruit/api) unless VITE_API_URL is set. */
 function resolveApiBaseUrl(): string {
   const explicit = import.meta.env.VITE_API_URL?.trim();
@@ -36,12 +43,22 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Response interceptor: expired/invalid session → login. Credential requests set
+// skipAuthRedirect so wrong password does not wipe a valid token or hard-page reload.
+// Do not hard-redirect on GET /auth/me: login() and checkAuth() need 401 to reach React
+// (otherwise the login form appears to reset with no error).
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Unauthorized - clear token and redirect to login
+    if (error.response?.status === 401 && !error.config?.skipAuthRedirect) {
+      const method = String(error.config?.method ?? 'get').toLowerCase();
+      const url = String(error.config?.url ?? '');
+      const isGetMe =
+        method === 'get' &&
+        (url.endsWith('/auth/me') || url.endsWith('/auth/me/'));
+      if (isGetMe) {
+        return Promise.reject(error);
+      }
       localStorage.removeItem('access_token');
       window.location.href = `${import.meta.env.BASE_URL}login`;
     }
@@ -50,5 +67,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-
-

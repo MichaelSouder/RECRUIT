@@ -81,11 +81,10 @@ def check_study_access(study_id: Optional[int], current_user: User, db: Session)
     if study_id is None:
         return True
     
-    # Refresh the user to get updated accessible_studies
-    db.refresh(current_user, ['accessible_studies'])
-    
-    # Check if user has access to this study
-    accessible_study_ids = [s.id for s in current_user.accessible_studies]
+    # Refresh memberships so study access reflects latest assignments
+    db.refresh(current_user, ["study_memberships"])
+
+    accessible_study_ids = [m.study_id for m in current_user.study_memberships]
     return study_id in accessible_study_ids
 
 

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { assessmentsApi, subjectsApi, studiesApi } from '../api/endpoints';
-import { Assessment, PaginatedResponse, Subject, Study } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { assessmentsApi, assessmentTypesApi, subjectsApi, studiesApi } from '../api/endpoints';
+import { Assessment, AssessmentType, PaginatedResponse, Subject, Study } from '../types';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { SearchableSelect, type SearchableSelectOption } from '../components/ui/SearchableSelect';
 import { Plus, Edit, Trash2, Eye, Download, ArrowUp, ArrowDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -32,6 +33,9 @@ export const Assessments: React.FC = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [studies, setStudies] = useState<Study[]>([]);
   const [assessmentTypes, setAssessmentTypes] = useState<string[]>([]);
+  const [assessmentTypeDisplayNames, setAssessmentTypeDisplayNames] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(true);
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -90,7 +94,23 @@ export const Assessments: React.FC = () => {
         console.error('Failed to fetch assessment types:', error);
       }
     };
+    const fetchTypeDisplayNames = async () => {
+      try {
+        const response = await assessmentTypesApi.getAll(false);
+        const rows = response.data as AssessmentType[];
+        const map: Record<string, string> = {};
+        for (const row of rows) {
+          if (row.name && row.display_name) {
+            map[row.name] = row.display_name.trim();
+          }
+        }
+        setAssessmentTypeDisplayNames(map);
+      } catch (error) {
+        console.error('Failed to fetch assessment type metadata:', error);
+      }
+    };
     fetchTypes();
+    fetchTypeDisplayNames();
   }, []);
 
   const fetchAssessments = async () => {
@@ -134,6 +154,68 @@ export const Assessments: React.FC = () => {
     fetchAssessments();
   }, [pagination.page, selectedSubjectId, selectedType, selectedStudy, sortBy, sortOrder]);
 
+  const subjectSelectOptions = useMemo((): SearchableSelectOption[] => {
+    const sorted = [...subjects].sort((a, b) => {
+      const last = a.last_name.localeCompare(b.last_name, undefined, {
+        sensitivity: 'base',
+      });
+      if (last !== 0) return last;
+      return a.first_name.localeCompare(b.first_name, undefined, {
+        sensitivity: 'base',
+      });
+    });
+    const opts: SearchableSelectOption[] = [
+      { value: '', label: 'All Subjects' },
+      ...sorted.map((s) => ({
+        value: String(s.id),
+        label: `${s.last_name}, ${s.first_name}`,
+      })),
+    ];
+    if (
+      selectedSubjectId != null &&
+      !opts.some((o) => o.value === String(selectedSubjectId))
+    ) {
+      opts.push({
+        value: String(selectedSubjectId),
+        label: `Subject #${selectedSubjectId}`,
+      });
+    }
+    return opts;
+  }, [subjects, selectedSubjectId]);
+
+  const assessmentTypeFilterLabel = (slug: string) => {
+    const short = ASSESSMENT_TYPE_NAMES[slug] || slug;
+    const full = assessmentTypeDisplayNames[slug]?.trim();
+    if (full && full.toLowerCase() !== short.toLowerCase()) {
+      return `${short} (${full})`;
+    }
+    return short;
+  };
+
+  const assessmentTypeSelectOptions = useMemo((): SearchableSelectOption[] => {
+    const sorted = [...assessmentTypes].sort((a, b) => {
+      const la = assessmentTypeFilterLabel(a).toLowerCase();
+      const lb = assessmentTypeFilterLabel(b).toLowerCase();
+      return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+    });
+    const opts: SearchableSelectOption[] = [
+      { value: '', label: 'All Types' },
+      ...sorted.map((t) => ({
+        value: t,
+        label: assessmentTypeFilterLabel(t),
+      })),
+    ];
+    if (
+      selectedType &&
+      !opts.some((o) => o.value === selectedType)
+    ) {
+      opts.push({
+        value: selectedType,
+        label: assessmentTypeFilterLabel(selectedType),
+      });
+    }
+    return opts;
+  }, [assessmentTypes, assessmentTypeDisplayNames, selectedType]);
 
   const handleSort = (column: 'subject' | 'date') => {
     if (sortBy === column) {
@@ -406,35 +488,27 @@ export const Assessments: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Filter by Subject
             </label>
-            <select
-              className="input"
-              value={selectedSubjectId || ''}
-              onChange={(e) => handleFilter(e.target.value ? parseInt(e.target.value) : null, selectedType)}
-            >
-              <option value="">All Subjects</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.last_name}, {subject.first_name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={subjectSelectOptions}
+              value={selectedSubjectId === null ? '' : String(selectedSubjectId)}
+              onChange={(v) =>
+                handleFilter(v === '' ? null : Number(v), selectedType)
+              }
+              inputPlaceholder="Search subjects…"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Filter by Assessment Type
             </label>
-            <select
-              className="input"
-              value={selectedType || ''}
-              onChange={(e) => handleFilter(selectedSubjectId, e.target.value || null)}
-            >
-              <option value="">All Types</option>
-              {assessmentTypes.map((type) => (
-                <option key={type} value={type}>
-                  {ASSESSMENT_TYPE_NAMES[type] || type}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={assessmentTypeSelectOptions}
+              value={selectedType ?? ''}
+              onChange={(v) =>
+                handleFilter(selectedSubjectId, v === '' ? null : v)
+              }
+              inputPlaceholder="Search types…"
+            />
           </div>
         </div>
       </div>

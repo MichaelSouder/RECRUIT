@@ -27,24 +27,24 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Export images to output/container-images
+      - name: Export images to container-images (linux/amd64)
         run: |
           chmod +x scripts/export-container-images.sh
           ./scripts/export-container-images.sh
 
       - name: List exported files (verify Postgres + Redis + app images)
         run: |
-          ls -la output/container-images/
-          test -f output/container-images/postgres-15.tar
-          test -f output/container-images/redis-7-alpine.tar
-          test -f output/container-images/recruit-backend.tar
-          test -f output/container-images/recruit-frontend.tar
-          test -f output/container-images/AIRGAP_DEPLOY.md
-          test -f output/container-images/load-container-images.sh
-          test -x output/container-images/load-container-images.sh
-          test -f output/container-images/airgap-stack-up.sh
-          test -x output/container-images/airgap-stack-up.sh
-          test -f output/container-images/recruit-airgap.env.example
+          ls -la container-images/
+          test -f container-images/postgres-15.tar
+          test -f container-images/redis-7-alpine.tar
+          test -f container-images/recruit-backend.tar
+          test -f container-images/recruit-frontend.tar
+          test -f container-images/AIRGAP_DEPLOY.md
+          test -f container-images/load-container-images.sh
+          test -x container-images/load-container-images.sh
+          test -f container-images/airgap-stack-up.sh
+          test -x container-images/airgap-stack-up.sh
+          test -f container-images/recruit-airgap.env.example
 
       # Split into two artifacts so Postgres/Redis are clearly visible and to reduce single-zip size limits.
       - name: Upload artifact — Postgres & Redis (infrastructure)
@@ -52,13 +52,13 @@ jobs:
         with:
           name: recruit-infra-postgres-redis
           path: |
-            output/container-images/postgres-15.tar
-            output/container-images/redis-7-alpine.tar
-            output/container-images/README-AIR-GAP.txt
-            output/container-images/AIRGAP_DEPLOY.md
-            output/container-images/load-container-images.sh
-            output/container-images/airgap-stack-up.sh
-            output/container-images/recruit-airgap.env.example
+            container-images/postgres-15.tar
+            container-images/redis-7-alpine.tar
+            container-images/README-AIR-GAP.txt
+            container-images/AIRGAP_DEPLOY.md
+            container-images/load-container-images.sh
+            container-images/airgap-stack-up.sh
+            container-images/recruit-airgap.env.example
           if-no-files-found: error
           retention-days: 30
 
@@ -67,13 +67,13 @@ jobs:
         with:
           name: recruit-app-backend-frontend
           path: |
-            output/container-images/recruit-backend.tar
-            output/container-images/recruit-frontend.tar
-            output/container-images/MANIFEST.txt
-            output/container-images/README-AIR-GAP.txt
-            output/container-images/AIRGAP_DEPLOY.md
-            output/container-images/load-container-images.sh
-            output/container-images/airgap-stack-up.sh
-            output/container-images/recruit-airgap.env.example
+            container-images/recruit-backend.tar
+            container-images/recruit-frontend.tar
+            container-images/MANIFEST.txt
+            container-images/README-AIR-GAP.txt
+            container-images/AIRGAP_DEPLOY.md
+            container-images/load-container-images.sh
+            container-images/airgap-stack-up.sh
+            container-images/recruit-airgap.env.example
           if-no-files-found: error
           retention-days: 30

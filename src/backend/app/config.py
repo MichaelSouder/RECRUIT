@@ -3,11 +3,13 @@ from typing import Optional, List
 
 
 class Settings(BaseSettings):
-    # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/recruit_db"
+    # Default: migrated RECRUIT DB on the legacy snapshot Postgres (host port 15432).
+    # Docker Compose backend instead uses DATABASE_URL=...@postgres:5432/... (internal volume).
+    database_url: str = "postgresql://postgres:postgres@localhost:15432/recruit_db"
     
-    # Security
-    secret_key: str = "your-secret-key-here-change-in-production"
+    # Security (default must match docker-compose.yml / docker-compose.prod.yml so host
+    # uvicorn and containerized backend issue interchangeable JWTs in dev).
+    secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
@@ -15,7 +17,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     
     # CORS
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = (
+        "http://localhost:5173,http://localhost:5174,http://localhost:3000,"
+        "http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:18080"
+    )
     
     # Application
     debug: bool = True

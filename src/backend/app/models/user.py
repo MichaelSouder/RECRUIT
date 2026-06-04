@@ -1,7 +1,9 @@
 from sqlalchemy import Column, String, Boolean
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import relationship
+
 from app.models.base import BaseModel
-from app.models.user_study import user_study
+from app.models.user_study import UserStudy
 
 
 class User(BaseModel):
@@ -17,6 +19,14 @@ class User(BaseModel):
     is_superuser = Column(Boolean, default=False)
     role = Column(String, default="viewer")  # admin, researcher, viewer
     
-    # Relationships
-    accessible_studies = relationship("Study", secondary=user_study, back_populates="users")
+    study_memberships = relationship(
+        "UserStudy",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    accessible_studies = association_proxy(
+        "study_memberships",
+        "study",
+        creator=lambda study: UserStudy(study=study, study_role="viewer"),
+    )
 

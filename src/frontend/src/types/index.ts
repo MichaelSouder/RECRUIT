@@ -40,6 +40,12 @@ export interface Study {
   updated_at: string;
 }
 
+/** Admin: one study assignment with per-study role (viewer / researcher / admin). */
+export interface UserStudyAccess {
+  study: Study;
+  study_role: string;
+}
+
 export interface SessionNote {
   id: number;
   subject_id: number;

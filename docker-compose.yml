@@ -6,8 +6,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: recruit_db
+    # Host port avoids clashing with docker-compose.postgres-snapshot.yml (also :15432).
     ports:
-      - "15432:5432"
+      - "25432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -42,11 +43,13 @@ services:
     container_name: recruit_backend
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recruit_db
+      - PG_WAIT_HOST=postgres
+      - PG_WAIT_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost:18080,http://frontend:80
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:3000,http://localhost:80,http://localhost:18080,http://frontend:80,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:18080
       - ENVIRONMENT=production
       - DEBUG=false
     ports:
@@ -74,8 +77,16 @@ services:
     # Initialize database on first startup
     entrypoint: >
       sh -c "
-        echo 'Waiting for PostgreSQL...' &&
-        until pg_isready -h postgres -U postgres; do sleep 1; done &&
+        echo \"Waiting for PostgreSQL at $$PG_WAIT_HOST:$$PG_WAIT_PORT (max ~120s)...\" &&
+        i=0 &&
+        until pg_isready -h \"$$PG_WAIT_HOST\" -p \"$$PG_WAIT_PORT\" -U postgres; do
+          i=$$((i+1)) &&
+          if [ $$i -ge 120 ]; then
+            echo 'ERROR: PostgreSQL did not become ready. For compose internal DB: docker compose up -d postgres. For migrated data on host :15432 see docker-compose.use-host-snapshot-db.yml.' &&
+            exit 1
+          fi &&
+          sleep 1
+        done &&
         echo 'PostgreSQL is ready!' &&
         echo 'Initializing database...' &&
         python -c 'from app.database import Base, engine; Base.metadata.create_all(bind=engine)' 2>&1 || true &&
@@ -90,12 +101,12 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_BASE_PATH: /
-        VITE_API_URL: http://localhost:18000
+        # Leave empty so the browser uses same-origin /api/... and nginx proxies to backend
+        # (avoids cross-origin calls to :18000 and broken setups when using 127.0.0.1 vs localhost).
+        VITE_API_URL: ""
         NGINX_CONFIG: default
         HEALTH_URI: /health
     container_name: recruit_frontend
-    environment:
-      - VITE_API_URL=http://localhost:18000
     ports:
       - "18080:80"
     depends_on:

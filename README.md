@@ -195,10 +195,11 @@ VITE_API_URL=http://localhost:8000
 Create a `.env` file in `src/backend/` with the following variables:
 
 ```env
-# Database Configuration
-DATABASE_URL=postgresql://user:password@localhost:5432/recruit_db
-# Or for SQLite (development):
-# DATABASE_URL=sqlite:///../recruit.db
+# Migrated legacy snapshot (see docker-compose.postgres-snapshot.yml, host port 15432)
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:15432/recruit_db
+
+# Or empty Compose Postgres on host port 25432 (not the snapshot):
+# DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:25432/recruit_db
 
 # Security
 SECRET_KEY=your-secret-key-here
@@ -224,7 +225,46 @@ VITE_API_URL=http://localhost:8000
 
 ### Development Mode
 
-#### Start Backend
+#### Local UI against the migrated snapshot DB (real legacy data)
+
+The migrated `recruit_db` lives on the **snapshot Postgres** mapped to **`127.0.0.1:15432`** (see `docker-compose.postgres-snapshot.yml`). `app/config.py` defaults `DATABASE_URL` to that URL, but using an explicit `.env` avoids surprises.
+
+1. Start the snapshot database (if it is not already running):
+
+```bash
+docker compose -f docker-compose.postgres-snapshot.yml up -d
+```
+
+2. From the repo root, start the API (picks `.venv-migrate/bin/python` or `venv/bin/python` if present):
+
+```bash
+chmod +x scripts/dev-host-with-snapshot-db.sh   # once
+./scripts/dev-host-with-snapshot-db.sh
+```
+
+Or manually:
+
+```bash
+cd src/backend
+cp .env.example .env   # optional; edit DATABASE_URL if your snapshot uses a different port
+source venv/bin/activate   # or: source .venv-migrate/bin/activate
+export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:15432/recruit_db
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+3. In a **second** terminal, start Vite (use **5174** if another app already uses **5173**):
+
+```bash
+cd src/frontend
+npm install   # first time only
+VITE_DEV_SERVER_PORT=5174 npm run dev
+```
+
+4. Open **`http://127.0.0.1:5174/`** (or **5173** if you did not set the port). Leave **`VITE_API_URL` unset** so the browser calls same-origin `/api/...` and Vite proxies to the backend.
+
+Do **not** set `VITE_API_URL=http://localhost:18000` for this flow; that targets Docker, not your host uvicorn.
+
+#### Start Backend (generic)
 
 1. Navigate to backend directory:
 ```bash
@@ -245,7 +285,7 @@ uvicorn app.main:app --reload
 
 The API will be available at `http://localhost:8000`
 
-#### Start Frontend
+#### Start Frontend (generic)
 
 1. Navigate to frontend directory:
 ```bash
@@ -259,7 +299,7 @@ npm run dev
 pnpm dev
 ```
 
-The application will be available at `http://localhost:5173`
+The application will be available at `http://localhost:5173` (or the port printed by Vite if you set `VITE_DEV_SERVER_PORT`)
 
 ### Production Mode
 
@@ -578,7 +618,7 @@ docker-compose down -v
 
 ### Air-gapped production
 
-Export all container images and deploy without Compose or registry access on the target host: **`docs/AIRGAP_DEPLOY.md`**. On a connected machine with Docker running, run **`./scripts/export-container-images.sh`** (output under **`output/container-images/`**, gitignored).
+Export all container images and deploy without Compose or registry access on the target host: **`docs/AIRGAP_DEPLOY.md`**. On a connected machine with Docker/Podman, run **`./scripts/export-container-images.sh`** (writes **`container-images/`** as `linux/amd64` for RHEL/x86_64; folder is gitignored).
 
 ## Troubleshooting
 

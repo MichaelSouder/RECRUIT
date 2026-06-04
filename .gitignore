@@ -1,3 +1,6 @@
+# IDE
+.cursor/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -13,8 +16,12 @@ ENV/
 *.sqlite3
 *.db-journal
 
-# DB snapshot PDFs (may contain PHI)
-output/
+# DB snapshot PDFs (may contain PHI) — keep these out of git
+output/*.pdf
+output/**/*.pdf
+
+# Offline container image .tar bundles (~hundreds of MB; scp to prod, do not commit without Git LFS)
+container-images/
 
 # Node
 node_modules/

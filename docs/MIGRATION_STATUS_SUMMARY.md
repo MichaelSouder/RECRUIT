@@ -1,5 +1,7 @@
 # Migration Status Summary
 
+> **See [CURRENT_STATUS.md](./CURRENT_STATUS.md) for the up-to-date picture (2026).** Below is the December 2024 Rails-focused summary.
+
 **Quick Reference** | See [MIGRATION_STATUS.md](./MIGRATION_STATUS.md) for full details
 
 ## Status: Migration Scripts NOT Implemented

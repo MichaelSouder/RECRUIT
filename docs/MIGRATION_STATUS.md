@@ -1,5 +1,7 @@
 # Migration Status: Old Rails Schema to New Schema
 
+> **2026 update:** For **current** status (Postgres `arc` / `dvbic_*` snapshot path, Alembic, Phase A discovery, migration plan), see **[CURRENT_STATUS.md](./CURRENT_STATUS.md)**. This file remains a **Rails / `old/`** audit from December 2024.
+
 **Date**: December 2024  
 **Status**: Migration Scripts NOT Implemented
 

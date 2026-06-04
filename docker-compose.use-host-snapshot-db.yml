@@ -1,0 +1,22 @@
+# Point recruit_backend at the migrated RECRUIT DB on the host (same as config.py default:
+# postgresql://postgres:postgres@localhost:15432/recruit_db).
+#
+# Requires: snapshot Postgres running, e.g.
+#   docker compose -f docker-compose.postgres-snapshot.yml up -d
+#
+# Usage (from repo root):
+#   docker compose -f docker-compose.yml -f docker-compose.use-host-snapshot-db.yml up -d redis backend frontend
+#
+# You do not need the compose `postgres` service for this profile; backend waits on host:15432 instead.
+
+services:
+  backend:
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:15432/recruit_db
+      - PG_WAIT_HOST=host.docker.internal
+      - PG_WAIT_PORT=15432
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

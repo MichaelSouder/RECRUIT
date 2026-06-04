@@ -27,8 +27,10 @@ export const Login: React.FC = () => {
         setError(errorMessages || 'Login failed');
       } else if (typeof errorDetail === 'string') {
         setError(errorDetail);
+      } else if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        setError('Cannot reach the API. Check that the backend is running and the dev proxy / URL match.');
       } else {
-        setError('Login failed. Please check your credentials.');
+        setError(err.message || 'Login failed. Please check your credentials.');
       }
     }
   };
@@ -119,7 +121,13 @@ export const Login: React.FC = () => {
           </div>
           {!import.meta.env.PROD && (
             <div className="text-sm text-gray-600 text-center bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="font-semibold text-blue-900 mb-2">Test Credentials:</p>
+              <p className="font-semibold text-blue-900 mb-2">Migrated snapshot DB (local):</p>
+              <p className="font-mono text-xs text-left mb-2">
+                <span className="font-semibold">migration-system@recruit.internal</span>
+                <br />
+                <span className="font-semibold">MigrationSystem!DoNotUse0</span>
+              </p>
+              <p className="font-semibold text-blue-900 mb-2">Sample seed users (empty DB only):</p>
               <div className="space-y-1 text-left">
                 <p className="font-mono text-xs">
                   <span className="font-semibold">Admin:</span> admin@recruit.com / admin123

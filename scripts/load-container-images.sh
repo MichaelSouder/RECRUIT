@@ -35,4 +35,15 @@ for f in postgres-15.tar redis-7-alpine.tar recruit-backend.tar recruit-frontend
   $CMD load -i "$path"
 done
 
+# airgap-stack-up.sh expects short names postgres:15 / redis:7-alpine
+tag_if_loaded() {
+  local src="$1"
+  local dst="$2"
+  if $CMD image inspect "$src" >/dev/null 2>&1; then
+    $CMD tag "$src" "$dst" 2>/dev/null || true
+  fi
+}
+tag_if_loaded "docker.io/library/postgres:15" "postgres:15"
+tag_if_loaded "docker.io/library/redis:7-alpine" "redis:7-alpine"
+
 echo "Done. See MANIFEST.txt in the same folder for image names."

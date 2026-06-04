@@ -1,0 +1,32 @@
+name: recruit-postgres-snapshot
+
+# PostgreSQL 13 from restored data/postgres.zip.part* (see scripts/restore-postgres-from-data-parts.sh).
+# Not compatible with postgres:15 — snapshot cluster is major version 13.
+# Project name is isolated so this file does not replace services from docker-compose.yml.
+#
+#   ./scripts/restore-postgres-from-data-parts.sh
+#   docker compose -f docker-compose.postgres-snapshot.yml up -d
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: recruit_postgres_snapshot
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "15432:5432"
+    volumes:
+      - ./data/.postgres-restore/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - recruit_network
+    restart: unless-stopped
+
+networks:
+  recruit_network:
+    driver: bridge

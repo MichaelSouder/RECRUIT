@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { authApi } from '../api/endpoints';
+import apiClient from '../api/client';
 
 interface AuthState {
   user: User | null;
@@ -23,12 +24,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true });
     try {
+      localStorage.removeItem('access_token');
       const response = await authApi.login(email, password);
       const { access_token } = response.data;
       localStorage.setItem('access_token', access_token);
-      
-      // Get user info
-      const userResponse = await authApi.getMe();
+
+      // Use the fresh token on this request so a stale JWT cannot race the interceptor.
+      const userResponse = await apiClient.get('/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
       set({
         user: userResponse.data,
         token: access_token,
@@ -36,7 +40,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
       });
     } catch (error) {
-      set({ isLoading: false });
+      localStorage.removeItem('access_token');
+      set({
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        token: null,
+      });
       throw error;
     }
   },
@@ -44,12 +54,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   loginWithPIV: async (certificateId: string) => {
     set({ isLoading: true });
     try {
+      localStorage.removeItem('access_token');
       const response = await authApi.loginWithPIV(certificateId);
       const { access_token } = response.data;
       localStorage.setItem('access_token', access_token);
-      
-      // Get user info
-      const userResponse = await authApi.getMe();
+
+      const userResponse = await apiClient.get('/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
       set({
         user: userResponse.data,
         token: access_token,
@@ -57,7 +69,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
       });
     } catch (error) {
-      set({ isLoading: false });
+      localStorage.removeItem('access_token');
+      set({
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        token: null,
+      });
       throw error;
     }
   },

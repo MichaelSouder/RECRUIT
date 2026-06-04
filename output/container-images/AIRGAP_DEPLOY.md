@@ -37,7 +37,7 @@ chmod +x scripts/export-container-images.sh
 ./scripts/export-container-images.sh
 ```
 
-Default output directory: **`output/container-images/`** (override with `OUTPUT_DIR=...`).
+Default output directory: **`container-images/`** at repo root (`linux/amd64` for RHEL; override with `OUTPUT_DIR=...`). Requires **skopeo** on Mac arm64 (`brew install skopeo`).
 
 **Option B — GitHub Actions**
 

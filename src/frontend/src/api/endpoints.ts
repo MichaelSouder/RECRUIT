@@ -3,11 +3,15 @@ import apiClient from './client';
 // Auth endpoints
 export const authApi = {
   login: (email: string, password: string) =>
-    apiClient.post('/api/v1/auth/login', { email, password }),
+    apiClient.post('/api/v1/auth/login', { email, password }, { skipAuthRedirect: true }),
   loginWithPIV: (certificateId: string) =>
-    apiClient.post('/api/v1/auth/login-piv', { certificate_id: certificateId }),
+    apiClient.post(
+      '/api/v1/auth/login-piv',
+      { certificate_id: certificateId },
+      { skipAuthRedirect: true }
+    ),
   register: (data: { email: string; password: string; full_name?: string }) =>
-    apiClient.post('/api/v1/auth/register', data),
+    apiClient.post('/api/v1/auth/register', data, { skipAuthRedirect: true }),
   getMe: () => apiClient.get('/api/v1/auth/me'),
   updateProfile: (data: { email?: string; full_name?: string }) =>
     apiClient.put('/api/v1/auth/me', data),
@@ -69,6 +73,8 @@ export const usersApi = {
   getStudies: (id: number) => apiClient.get(`/api/v1/admin/users/${id}/studies`),
   addStudies: (id: number, studyIds: number[]) => apiClient.post(`/api/v1/admin/users/${id}/studies`, studyIds),
   removeStudy: (userId: number, studyId: number) => apiClient.delete(`/api/v1/admin/users/${userId}/studies/${studyId}`),
+  patchUserStudyRole: (userId: number, studyId: number, study_role: string) =>
+    apiClient.patch(`/api/v1/admin/users/${userId}/studies/${studyId}`, { study_role }),
 };
 
 // Assessment Types endpoints

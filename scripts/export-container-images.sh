@@ -11,9 +11,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="${OUTPUT_DIR:-$ROOT/output/container-images}"
+# Default bundle folder (override: OUTPUT_DIR=...). Also valid: output/container-images
+OUT_DIR="${OUTPUT_DIR:-$ROOT/container-images}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-ghcr.io/michaelsouder}"
 TAG="${IMAGE_TAG:-latest}"
+# Red Hat / typical prod servers are linux/amd64. Export arm64 Mac images without this.
+TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
 
 DOCKER_CMD="${DOCKER_CMD:-}"
 if [[ -n "$DOCKER_CMD" ]] && ! command -v "$DOCKER_CMD" >/dev/null 2>&1; then
@@ -35,6 +38,39 @@ mkdir -p "$OUT_DIR"
 
 echo "Using: $DOCKER_CMD"
 echo "Output: $OUT_DIR"
+echo "Target platform: $TARGET_PLATFORM (RHEL/x86_64 and most servers)"
+echo ""
+
+pull_image() {
+  local ref="$1"
+  if [[ "$DOCKER_CMD" == "podman" ]]; then
+    $DOCKER_CMD pull --platform "$TARGET_PLATFORM" "$ref"
+  else
+    $DOCKER_CMD pull --platform "$TARGET_PLATFORM" "$ref"
+  fi
+}
+
+build_image() {
+  local tag="$1"
+  local context="$2"
+  shift 2
+  if [[ "$DOCKER_CMD" == "docker" ]]; then
+    if ! docker buildx version >/dev/null 2>&1; then
+      echo "Error: docker buildx required to build $TARGET_PLATFORM images on this host." >&2
+      exit 1
+    fi
+    docker buildx build --platform "$TARGET_PLATFORM" --load -t "$tag" "$@" "$context"
+  else
+    $DOCKER_CMD build --platform "$TARGET_PLATFORM" -t "$tag" "$@" "$context"
+  fi
+}
+
+if [[ "$DOCKER_CMD" == "docker" ]]; then
+  docker buildx inspect recruit-export-builder >/dev/null 2>&1 \
+    || docker buildx create --name recruit-export-builder --use >/dev/null
+  docker buildx inspect --bootstrap >/dev/null 2>&1 || true
+fi
+
 echo ""
 echo "This export includes ALL FOUR images required for air-gapped deploy:"
 echo "  1. postgres:15          -> postgres-15.tar          (PostgreSQL — from Docker Hub)"
@@ -43,20 +79,21 @@ echo "  3. ${IMAGE_PREFIX}/recruit-backend:${TAG}  -> recruit-backend.tar"
 echo "  4. ${IMAGE_PREFIX}/recruit-frontend:${TAG} -> recruit-frontend.tar"
 echo ""
 
-echo "==> Pull base images"
-$DOCKER_CMD pull postgres:15
-$DOCKER_CMD pull redis:7-alpine
+echo "==> Pull base images ($TARGET_PLATFORM)"
+pull_image "docker.io/library/postgres:15"
+pull_image "docker.io/library/redis:7-alpine"
+# Tags used after load (match load-container-images.sh)
+$DOCKER_CMD tag "docker.io/library/postgres:15" postgres:15 2>/dev/null || true
+$DOCKER_CMD tag "docker.io/library/redis:7-alpine" redis:7-alpine 2>/dev/null || true
 
-echo "==> Build application images"
-$DOCKER_CMD build -t "${IMAGE_PREFIX}/recruit-backend:${TAG}" "$ROOT/src/backend"
+echo "==> Build application images ($TARGET_PLATFORM)"
+build_image "${IMAGE_PREFIX}/recruit-backend:${TAG}" "$ROOT/src/backend"
 
-$DOCKER_CMD build \
+build_image "${IMAGE_PREFIX}/recruit-frontend:${TAG}" "$ROOT/src/frontend" \
   --build-arg "VITE_BASE_PATH=/recruit/" \
   --build-arg "VITE_API_URL=" \
   --build-arg "NGINX_CONFIG=recruit" \
-  --build-arg "HEALTH_URI=/recruit/health" \
-  -t "${IMAGE_PREFIX}/recruit-frontend:${TAG}" \
-  "$ROOT/src/frontend"
+  --build-arg "HEALTH_URI=/recruit/health"
 
 echo "==> Save images to tar archives"
 
@@ -64,11 +101,31 @@ save_one() {
   local ref="$1"
   local file="$2"
   echo "    saving $ref -> $(basename "$file")"
-  $DOCKER_CMD save -o "$file" "$ref"
+  rm -f "$file"
+  if command -v skopeo >/dev/null 2>&1; then
+    # Reliable linux/amd64 export on Apple Silicon (avoids docker save digest bugs).
+    if [[ "$ref" == docker.io/* ]] || [[ "$ref" == */*/* ]]; then
+      skopeo copy "docker://${ref}" "docker-archive:${file}" \
+        --override-os linux --override-arch amd64 2>/dev/null \
+        || skopeo copy "docker://${ref}" "docker-archive:${file}"
+    else
+      skopeo copy "docker-daemon:${ref}" "docker-archive:${file}" \
+        --override-os linux --override-arch amd64 2>/dev/null \
+        || skopeo copy "docker-daemon:${ref}" "docker-archive:${file}"
+    fi
+  else
+    echo "    (install skopeo for reliable linux/amd64 exports on Apple Silicon)" >&2
+    $DOCKER_CMD save -o "$file" "$ref"
+  fi
 }
 
-save_one "postgres:15" "$OUT_DIR/postgres-15.tar"
-save_one "redis:7-alpine" "$OUT_DIR/redis-7-alpine.tar"
+if ! command -v skopeo >/dev/null 2>&1; then
+  echo "Warning: skopeo not found; docker save may fail for multi-arch base images on arm64 Macs." >&2
+  echo "  Install: brew install skopeo" >&2
+fi
+
+save_one "docker.io/library/postgres:15" "$OUT_DIR/postgres-15.tar"
+save_one "docker.io/library/redis:7-alpine" "$OUT_DIR/redis-7-alpine.tar"
 save_one "${IMAGE_PREFIX}/recruit-backend:${TAG}" "$OUT_DIR/recruit-backend.tar"
 save_one "${IMAGE_PREFIX}/recruit-frontend:${TAG}" "$OUT_DIR/recruit-frontend.tar"
 
@@ -76,6 +133,7 @@ MANIFEST="$OUT_DIR/MANIFEST.txt"
 {
   echo "RECRUIT container image export"
   echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "TARGET_PLATFORM=${TARGET_PLATFORM}"
   echo "IMAGE_PREFIX=${IMAGE_PREFIX}"
   echo "IMAGE_TAG=${TAG}"
   echo ""
