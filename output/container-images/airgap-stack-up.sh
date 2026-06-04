@@ -544,13 +544,26 @@ else
     if container_running postgres; then
       log_ok "Postgres already running."
     else
-      log_warn "Postgres container exists but is stopped; starting..."
-      run $DOCKER_CMD start postgres
+      log_warn "Postgres container exists but is stopped — removing and recreating (stale container from a previous attempt)."
+      run $DOCKER_CMD rm -f postgres
+      log_info "Creating Postgres ($POSTGRES_IMAGE)..."
+      run $DOCKER_CMD run -d \
+        --name postgres \
+        --pull=never \
+        --network "$RECRUIT_NETWORK" \
+        -e "POSTGRES_USER=$POSTGRES_USER" \
+        -e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
+        -e "POSTGRES_DB=$POSTGRES_DB" \
+        -p "${POSTGRES_PUBLISH:-15432:5432}" \
+        -v "${RECRUIT_PG_VOLUME}:/var/lib/postgresql/data" \
+        --restart unless-stopped \
+        "$POSTGRES_IMAGE"
     fi
   else
     log_info "Creating Postgres ($POSTGRES_IMAGE)..."
     run $DOCKER_CMD run -d \
       --name postgres \
+      --pull=never \
       --network "$RECRUIT_NETWORK" \
       -e "POSTGRES_USER=$POSTGRES_USER" \
       -e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
@@ -569,13 +582,22 @@ if container_exists redis; then
   if container_running redis; then
     log_ok "Redis already running."
   else
-    log_warn "Redis container exists but is stopped; starting..."
-    run $DOCKER_CMD start redis
+    log_warn "Redis container exists but is stopped — removing and recreating."
+    run $DOCKER_CMD rm -f redis
+    log_info "Creating Redis ($REDIS_IMAGE)..."
+    run $DOCKER_CMD run -d \
+      --name redis \
+      --pull=never \
+      --network "$RECRUIT_NETWORK" \
+      -p "${REDIS_PUBLISH:-16379:6379}" \
+      --restart unless-stopped \
+      "$REDIS_IMAGE"
   fi
 else
   log_info "Creating Redis ($REDIS_IMAGE)..."
   run $DOCKER_CMD run -d \
     --name redis \
+    --pull=never \
     --network "$RECRUIT_NETWORK" \
     -p "${REDIS_PUBLISH:-16379:6379}" \
     --restart unless-stopped \
@@ -600,14 +622,38 @@ if container_exists backend; then
   if container_running backend; then
     log_ok "Backend already running."
   else
-    log_warn "Backend container exists but is stopped; starting..."
-    run $DOCKER_CMD start backend
+    log_warn "Backend container exists but is stopped — removing and recreating."
+    run $DOCKER_CMD rm -f backend
+    log_info "Creating backend..."
+    run $DOCKER_CMD run -d \
+      "${BACKEND_EXTRA_HOST[@]}" \
+      --name backend \
+      --pull=never \
+      --network "$RECRUIT_NETWORK" \
+      -e "DATABASE_URL=$DATABASE_URL" \
+      -e "PGHOST=$PGHOST_FOR_BACKEND" \
+      -e "PGPORT=${POSTGRES_SERVICE_PORT:-5432}" \
+      -e "REDIS_URL=${REDIS_URL:-redis://redis:6379/0}" \
+      -e "SECRET_KEY=$SECRET_KEY" \
+      -e "ALGORITHM=${ALGORITHM:-HS256}" \
+      -e "ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}" \
+      -e "CORS_ORIGINS=$CORS_ORIGINS" \
+      -e "ENVIRONMENT=${ENVIRONMENT:-production}" \
+      -e "DEBUG=${DEBUG:-false}" \
+      -e "SEED_INITIAL_ADMIN=${SEED_INITIAL_ADMIN:-true}" \
+      -e "INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-admin@example.com}" \
+      -e "INITIAL_ADMIN_PASSWORD=$INITIAL_ADMIN_PASSWORD" \
+      -p "${BACKEND_PUBLISH:-18000:8000}" \
+      --restart unless-stopped \
+      "$BACKEND_IMAGE" \
+      sh -c "$BACKEND_INNER"
   fi
 else
   log_info "Creating backend..."
   run $DOCKER_CMD run -d \
     "${BACKEND_EXTRA_HOST[@]}" \
     --name backend \
+    --pull=never \
     --network "$RECRUIT_NETWORK" \
     -e "DATABASE_URL=$DATABASE_URL" \
     -e "PGHOST=$PGHOST_FOR_BACKEND" \
@@ -634,13 +680,22 @@ if container_exists frontend; then
   if container_running frontend; then
     log_ok "Frontend already running."
   else
-    log_warn "Frontend container exists but is stopped; starting..."
-    run $DOCKER_CMD start frontend
+    log_warn "Frontend container exists but is stopped — removing and recreating."
+    run $DOCKER_CMD rm -f frontend
+    log_info "Creating frontend..."
+    run $DOCKER_CMD run -d \
+      --name frontend \
+      --pull=never \
+      --network "$RECRUIT_NETWORK" \
+      -p "${FRONTEND_PUBLISH:-18080:80}" \
+      --restart unless-stopped \
+      "$FRONTEND_IMAGE"
   fi
 else
   log_info "Creating frontend..."
   run $DOCKER_CMD run -d \
     --name frontend \
+    --pull=never \
     --network "$RECRUIT_NETWORK" \
     -p "${FRONTEND_PUBLISH:-18080:80}" \
     --restart unless-stopped \
