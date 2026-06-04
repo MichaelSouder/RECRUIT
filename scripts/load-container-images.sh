@@ -35,15 +35,29 @@ for f in postgres-15.tar redis-7-alpine.tar recruit-backend.tar recruit-frontend
   $CMD load -i "$path"
 done
 
-# airgap-stack-up.sh expects short names postgres:15 / redis:7-alpine
-tag_if_loaded() {
-  local src="$1"
-  local dst="$2"
+# Ensure both short and fully-qualified names exist for the base images.
+#
+# RHEL Podman strict short-name mode stores a loaded "postgres:15" as
+# "localhost/postgres:15", not "docker.io/library/postgres:15".  The old
+# logic only tried to alias fq→short, so on RHEL neither alias was created.
+# We now try all three source prefixes so the right tag is always added
+# regardless of which name the engine assigned after load.
+add_alias() {
+  local src="$1" dst="$2"
   if $CMD image inspect "$src" >/dev/null 2>&1; then
-    $CMD tag "$src" "$dst" 2>/dev/null || true
+    $CMD tag "$src" "$dst" 2>/dev/null && echo "  aliased $src -> $dst" || true
   fi
 }
-tag_if_loaded "docker.io/library/postgres:15" "postgres:15"
-tag_if_loaded "docker.io/library/redis:7-alpine" "redis:7-alpine"
+
+for base in "postgres:15" "redis:7-alpine"; do
+  fq="docker.io/library/${base}"
+  loc="localhost/${base}"
+  # localhost/ -> fq  (RHEL strict mode: loaded as localhost/)
+  add_alias "$loc" "$fq"
+  # fq -> short       (non-strict mode / Docker: loaded as fq)
+  add_alias "$fq"  "$base"
+  # short -> fq       (already short but fq missing)
+  add_alias "$base" "$fq"
+done
 
 echo "Done. See MANIFEST.txt in the same folder for image names."
