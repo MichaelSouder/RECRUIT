@@ -549,7 +549,7 @@ else
       log_info "Creating Postgres ($POSTGRES_IMAGE)..."
       run $DOCKER_CMD run -d \
         --name postgres \
-        --pull=never \
+  
         --network "$RECRUIT_NETWORK" \
         -e "POSTGRES_USER=$POSTGRES_USER" \
         -e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
@@ -563,7 +563,7 @@ else
     log_info "Creating Postgres ($POSTGRES_IMAGE)..."
     run $DOCKER_CMD run -d \
       --name postgres \
-      --pull=never \
+
       --network "$RECRUIT_NETWORK" \
       -e "POSTGRES_USER=$POSTGRES_USER" \
       -e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
@@ -587,7 +587,7 @@ if container_exists redis; then
     log_info "Creating Redis ($REDIS_IMAGE)..."
     run $DOCKER_CMD run -d \
       --name redis \
-      --pull=never \
+
       --network "$RECRUIT_NETWORK" \
       -p "${REDIS_PUBLISH:-16379:6379}" \
       --restart unless-stopped \
@@ -597,7 +597,7 @@ else
   log_info "Creating Redis ($REDIS_IMAGE)..."
   run $DOCKER_CMD run -d \
     --name redis \
-    --pull=never \
+
     --network "$RECRUIT_NETWORK" \
     -p "${REDIS_PUBLISH:-16379:6379}" \
     --restart unless-stopped \
@@ -628,7 +628,7 @@ if container_exists backend; then
     run $DOCKER_CMD run -d \
       "${BACKEND_EXTRA_HOST[@]}" \
       --name backend \
-      --pull=never \
+
       --network "$RECRUIT_NETWORK" \
       -e "DATABASE_URL=$DATABASE_URL" \
       -e "PGHOST=$PGHOST_FOR_BACKEND" \
@@ -653,7 +653,7 @@ else
   run $DOCKER_CMD run -d \
     "${BACKEND_EXTRA_HOST[@]}" \
     --name backend \
-    --pull=never \
+
     --network "$RECRUIT_NETWORK" \
     -e "DATABASE_URL=$DATABASE_URL" \
     -e "PGHOST=$PGHOST_FOR_BACKEND" \
@@ -685,7 +685,7 @@ if container_exists frontend; then
     log_info "Creating frontend..."
     run $DOCKER_CMD run -d \
       --name frontend \
-      --pull=never \
+
       --network "$RECRUIT_NETWORK" \
       -p "${FRONTEND_PUBLISH:-18080:80}" \
       --restart unless-stopped \
@@ -695,7 +695,7 @@ else
   log_info "Creating frontend..."
   run $DOCKER_CMD run -d \
     --name frontend \
-    --pull=never \
+
     --network "$RECRUIT_NETWORK" \
     -p "${FRONTEND_PUBLISH:-18080:80}" \
     --restart unless-stopped \
