@@ -1,5 +1,5 @@
 RECRUIT container image export
-Generated: 2026-06-04T14:42:49Z
+Generated: 2026-06-04T16:23:13Z
 TARGET_PLATFORM=linux/amd64
 IMAGE_PREFIX=ghcr.io/michaelsouder
 IMAGE_TAG=latest

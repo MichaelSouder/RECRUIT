@@ -100,18 +100,23 @@ echo "==> Save images to tar archives"
 save_one() {
   local ref="$1"
   local file="$2"
-  echo "    saving $ref -> $(basename "$file")"
+  # Embed an explicit RepoTag in the archive so RHEL Podman (strict short-name
+  # mode) can tag it on load.  Without this, skopeo leaves RepoTags:[] and
+  # every image lands as <none>:<none> on the target host.
+  # docker-archive:FILE:TAG tells skopeo to write TAG into the manifest.
+  local dest_tag="$ref"
+  echo "    saving $ref -> $(basename "$file") (tag: ${dest_tag})"
   rm -f "$file"
   if command -v skopeo >/dev/null 2>&1; then
     # Reliable linux/amd64 export on Apple Silicon (avoids docker save digest bugs).
     if [[ "$ref" == docker.io/* ]] || [[ "$ref" == */*/* ]]; then
-      skopeo copy "docker://${ref}" "docker-archive:${file}" \
+      skopeo copy "docker://${ref}" "docker-archive:${file}:${dest_tag}" \
         --override-os linux --override-arch amd64 2>/dev/null \
-        || skopeo copy "docker://${ref}" "docker-archive:${file}"
+        || skopeo copy "docker://${ref}" "docker-archive:${file}:${dest_tag}"
     else
-      skopeo copy "docker-daemon:${ref}" "docker-archive:${file}" \
+      skopeo copy "docker-daemon:${ref}" "docker-archive:${file}:${dest_tag}" \
         --override-os linux --override-arch amd64 2>/dev/null \
-        || skopeo copy "docker-daemon:${ref}" "docker-archive:${file}"
+        || skopeo copy "docker-daemon:${ref}" "docker-archive:${file}:${dest_tag}"
     fi
   else
     echo "    (install skopeo for reliable linux/amd64 exports on Apple Silicon)" >&2
