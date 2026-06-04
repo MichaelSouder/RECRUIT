@@ -3,20 +3,14 @@
 #
 # Usage:
 #   ./scripts/load-container-images.sh output/container-images/
-#   # or from inside the bundle directory:
-#   ./load-container-images.sh .
-#
-# RHEL Podman strict short-name mode strips short-name RepoTags (postgres:15,
-# redis:7-alpine) from loaded archives, leaving images as <none>:<none>.
-# This script detects that case via before/after image-ID comparison and
-# applies the correct fully-qualified tag explicitly.
+#   ./load-container-images.sh .   (from inside the bundle directory)
 
 set -euo pipefail
 
 DIR="${1:-.}"
 [[ -d "$DIR" ]] || { echo "Usage: $0 [directory-containing-tar-files]" >&2; exit 1; }
 
-# Prefer podman when both are present (production target is RHEL/Podman).
+# Prefer podman on RHEL/production hosts.
 if command -v podman >/dev/null 2>&1; then
   CMD=podman
 elif command -v docker >/dev/null 2>&1; then
@@ -26,63 +20,62 @@ else
 fi
 echo "Using: $CMD"
 
+# Remove untagged images left over from a previous failed load attempt,
+# otherwise podman load may skip re-loading (image already in store).
+echo "Removing leftover untagged images ..."
+"$CMD" rmi $("$CMD" images -q -f dangling=true 2>/dev/null) 2>/dev/null || true
+
 # Load a tar and ensure it ends up tagged as $want_tag.
-# If the engine strips the embedded tag (RHEL strict mode), we find the new
-# image by diffing image IDs before and after, then tag by ID.
+#
+# RHEL Podman strict short-name mode refuses to tag short names (postgres:15)
+# so the image lands as <none>:<none>.  We capture "Loaded image: sha256:..."
+# from podman's own output and retag by that ID.
 load_and_tag() {
   local file="$1"
   local want_tag="$2"
 
-  [[ -f "$file" ]] || { echo "Missing: $file" >&2; exit 1; }
+  [[ -f "$file" ]] || { echo "ERROR: missing $file" >&2; exit 1; }
   echo ""
-  echo "Loading $(basename "$file") ..."
+  echo "==> $(basename "$file")"
 
-  # Snapshot IDs already present
-  local before
-  before=$("$CMD" images --no-trunc -q 2>/dev/null | sort -u)
+  # Capture stdout+stderr so we can parse the loaded image reference.
+  local out
+  out=$("$CMD" load -i "$file" 2>&1)
+  echo "$out"
 
-  "$CMD" load -i "$file"
-
-  # If the archive's own tag was accepted, we're done
+  # Already tagged correctly (archive tag was accepted or re-run)?
   if "$CMD" image inspect "$want_tag" >/dev/null 2>&1; then
-    echo "  OK: $want_tag"
+    echo "    OK: $want_tag"
     return 0
   fi
 
-  # Find the newly added image ID
-  local after new_id
-  after=$("$CMD" images --no-trunc -q 2>/dev/null | sort -u)
-  new_id=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -1)
+  # Parse "Loaded image: sha256:..." or "Loaded image(s): name:tag" from output.
+  local ref
+  ref=$(printf '%s\n' "$out" \
+        | grep -i 'loaded image' \
+        | sed 's/.*Loaded image[s]*:[[:space:]]*//' \
+        | tr -d '\r' \
+        | head -1)
 
-  if [[ -n "$new_id" ]]; then
-    echo "  Tag was stripped (RHEL strict mode); tagging $new_id -> $want_tag"
-    "$CMD" tag "$new_id" "$want_tag"
-  else
-    # Image was already in store (re-run); just verify the tag
-    if ! "$CMD" image inspect "$want_tag" >/dev/null 2>&1; then
-      echo "  WARNING: could not find or tag image for $want_tag" >&2
-    fi
+  if [[ -z "$ref" ]]; then
+    echo "    ERROR: no 'Loaded image' line in load output." >&2
+    echo "    Full output was:" >&2
+    printf '%s\n' "$out" >&2
+    exit 1
   fi
+
+  echo "    Tagging: $ref  ->  $want_tag"
+  "$CMD" tag "$ref" "$want_tag"
+  echo "    OK: $want_tag"
 }
 
-# Add short-name alias (best-effort; may be refused on strict mode but the fq
-# name is what airgap-stack-up.sh uses when POSTGRES_IMAGE / REDIS_IMAGE are set)
-alias_short() {
-  local fq="$1" short="$2"
-  if "$CMD" image inspect "$fq" >/dev/null 2>&1 && \
-     ! "$CMD" image inspect "$short" >/dev/null 2>&1; then
-    "$CMD" tag "$fq" "$short" 2>/dev/null && echo "  Also tagged: $short" || true
-  fi
-}
-
-# --- base images (tags in archives are short names; use fq as canonical) ---
+# ── base images ──────────────────────────────────────────────────────────────
+# The docker-archive embeds short RepoTags (postgres:15, redis:7-alpine).
+# RHEL strict mode strips them; we tag explicitly with the fq name.
 load_and_tag "$DIR/postgres-15.tar"    "docker.io/library/postgres:15"
-alias_short  "docker.io/library/postgres:15" "postgres:15"
-
 load_and_tag "$DIR/redis-7-alpine.tar" "docker.io/library/redis:7-alpine"
-alias_short  "docker.io/library/redis:7-alpine" "redis:7-alpine"
 
-# --- app images (read canonical tag from MANIFEST.txt) ---
+# ── app images ───────────────────────────────────────────────────────────────
 MANIFEST="$DIR/MANIFEST.txt"
 if [[ -f "$MANIFEST" ]]; then
   IMAGE_PREFIX=$(grep '^IMAGE_PREFIX=' "$MANIFEST" | head -1 | cut -d= -f2 | tr -d '[:space:]')
@@ -90,11 +83,12 @@ if [[ -f "$MANIFEST" ]]; then
   load_and_tag "$DIR/recruit-backend.tar"  "${IMAGE_PREFIX}/recruit-backend:${IMAGE_TAG}"
   load_and_tag "$DIR/recruit-frontend.tar" "${IMAGE_PREFIX}/recruit-frontend:${IMAGE_TAG}"
 else
-  echo "MANIFEST.txt not found; loading app images without tag verification."
+  echo "MANIFEST.txt not found in $DIR; loading app images without tag verification."
   "$CMD" load -i "$DIR/recruit-backend.tar"
   "$CMD" load -i "$DIR/recruit-frontend.tar"
 fi
 
+# ── summary ──────────────────────────────────────────────────────────────────
 echo ""
-echo "Done. Loaded images:"
-"$CMD" images --format "{{.Repository}}:{{.Tag}}" | grep -v '<none>' || true
+echo "Images now present:"
+"$CMD" images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}"
