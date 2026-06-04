@@ -313,14 +313,18 @@ require_all_images() {
   local missing=0 hub_alt
   if ! use_host_postgres; then
     hub_alt="$(hub_library_alias "${POSTGRES_IMAGE:-postgres:15}")"
-    if ! POSTGRES_IMAGE="$(resolve_image postgres "${POSTGRES_IMAGE:-postgres:15}" "$hub_alt")"; then
+    # Try fully-qualified name first: RHEL Podman strict short-name policy allows
+    # inspect on short names but rejects them in "run".  hub_alt is fq when input
+    # is short; if POSTGRES_IMAGE was already fq, hub_alt is empty and fq is tried
+    # as the primary candidate below.
+    if ! POSTGRES_IMAGE="$(resolve_image postgres "$hub_alt" "${POSTGRES_IMAGE:-postgres:15}")"; then
       missing=1
     fi
   else
     log_info "USE_HOST_POSTGRES: skipping postgres container image check."
   fi
   hub_alt="$(hub_library_alias "${REDIS_IMAGE:-redis:7-alpine}")"
-  if ! REDIS_IMAGE="$(resolve_image redis "${REDIS_IMAGE:-redis:7-alpine}" "$hub_alt")"; then
+  if ! REDIS_IMAGE="$(resolve_image redis "$hub_alt" "${REDIS_IMAGE:-redis:7-alpine}")"; then
     missing=1
   fi
   if ! BACKEND_IMAGE="$(resolve_image backend "${BACKEND_IMAGE}")"; then
