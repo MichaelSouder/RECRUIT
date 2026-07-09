@@ -40,6 +40,19 @@ This assembles the dump, restores it (`--clean --if-exists`, so it's safe to
 run against a target that already has an empty schema or a seeded admin
 user), and runs `migration-verify.sh` automatically.
 
+**Your `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` login will stop working
+after this** - `--clean` replaces the whole `users` table with only the real
+historical accounts from the dump. Restore it (or any known admin login)
+with:
+
+```bash
+./scripts/migration/ensure-admin.sh
+```
+
+Reads `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` from the `backend`
+container's own environment by default; set `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+to use different credentials instead. Safe to re-run.
+
 Only override the environment if your setup differs from the above
 (different container name, database, or credentials):
 
