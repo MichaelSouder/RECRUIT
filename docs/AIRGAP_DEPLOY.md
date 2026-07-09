@@ -219,7 +219,7 @@ docker run -d \
     until pg_isready -h \"\${PGHOST:-postgres}\" -p \"\${PGPORT:-5432}\" -U postgres; do sleep 1; done &&
     echo 'PostgreSQL is ready!' &&
     echo 'Initializing database...' &&
-    python -c 'from app.database import Base, engine; Base.metadata.create_all(bind=engine)' 2>&1 || true &&
+    python -c 'import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine)' 2>&1 || true &&
     python scripts/add_assessment_time_to_assessments.py 2>&1 || echo 'Migration may have already run' &&
     echo 'Database initialized!' &&
     exec uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -272,6 +272,7 @@ Open in a browser: **`http://YOUR_SERVER:18080/recruit/`** (trailing slash recom
 | **`airgap-stack-up.sh` stuck on Postgres** | With **host** Postgres, set **`USE_HOST_POSTGRES=true`** and **`POSTGRES_WAIT_*`** so the script does not **`exec`** a missing **`postgres`** container. With **bundled** Postgres, check **`docker logs postgres`**. |
 | Missing images after **`docker load`** | Load and run with the **same** engine (**`DOCKER_CMD=podman`** or **`docker`**). **`airgap-stack-up.sh`** picks the engine that already has the backend image when both are installed. |
 | Name already in use | Remove old container: **`docker rm -f postgres`** (only if you intend to recreate)—**warning:** recreating Postgres without the volume loses DB data unless you know what you are doing. |
+| 500 on login, `relation "users" does not exist` | DB has no tables (older init command didn't register models before `create_all()`). Fix without redeploying: **`./scripts/fix-missing-tables.sh`**. See **`docs/FIX_MISSING_TABLES.md`**. |
 
 ## 17. Related documentation
 

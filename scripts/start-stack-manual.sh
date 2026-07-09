@@ -148,7 +148,7 @@ podman run -d \
   "$BACKEND_IMAGE" \
   sh -c "
     until pg_isready -h postgres -p 5432 -U ${POSTGRES_USER}; do sleep 1; done &&
-    python -c 'from app.database import Base, engine; Base.metadata.create_all(bind=engine)' 2>&1 || true &&
+    python -c 'import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine)' 2>&1 || true &&
     python scripts/add_assessment_time_to_assessments.py 2>&1 || true &&
     exec uvicorn app.main:app --host 0.0.0.0 --port 8000
   "

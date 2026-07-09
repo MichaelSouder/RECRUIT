@@ -64,7 +64,7 @@ function View-Logs {
 
 function Initialize-Database {
     Write-Host "Initializing database..." -ForegroundColor Yellow
-    docker exec recruit_backend python -c "from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
+    docker exec recruit_backend python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
     Write-Host "Database initialized!" -ForegroundColor Green
 }
 

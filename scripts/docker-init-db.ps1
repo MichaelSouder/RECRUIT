@@ -10,7 +10,7 @@ do {
 Write-Host "PostgreSQL is ready!"
 
 Write-Host "Creating database tables..."
-docker exec recruit_backend python -c "from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
+docker exec recruit_backend python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
 
 Write-Host "Running migration scripts..."
 docker exec recruit_backend python scripts/add_assessment_time_to_assessments.py

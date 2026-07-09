@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Create missing database tables on a RECRUIT backend that is already deployed
+# and running, without rebuilding or redeploying images.
+#
+# Background: older versions of the DB-init one-liner used by docker-compose
+# and the airgap scripts ran:
+#   python -c 'from app.database import Base, engine; Base.metadata.create_all(bind=engine)'
+# which never imports the model modules, so Base.metadata had zero tables
+# registered and create_all() silently created nothing. Symptom: 500 on
+# login with "relation \"users\" does not exist" in the backend logs.
+# See docs/FIX_MISSING_TABLES.md for details.
+#
+# This script re-runs create_all() correctly (with app.models imported)
+# inside the already-running backend container. Safe to re-run any time:
+# create_all() only creates tables that don't already exist.
+#
+# Usage:
+#   ./scripts/fix-missing-tables.sh [container_name]
+#
+# Environment:
+#   DOCKER_CMD   Force docker | podman (auto-detected if unset).
+
+set -euo pipefail
+
+NC=$'\033[0m'
+GREEN=$'\033[0;32m'
+RED=$'\033[0;31m'
+CYAN=$'\033[0;36m'
+
+log_info() { echo -e "${CYAN}[INFO]${NC}  $*"; }
+log_ok()   { echo -e "${GREEN}[ OK ]${NC}  $*"; }
+log_err()  { echo -e "${RED}[ERR ]${NC}  $*" >&2; }
+
+CANDIDATE_NAMES=(backend recruit_backend)
+if [[ $# -gt 0 ]]; then
+  CANDIDATE_NAMES=("$1")
+fi
+
+pick_engine() {
+  if [[ -n "${DOCKER_CMD:-}" ]]; then
+    echo "$DOCKER_CMD"
+    return
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    echo docker
+  elif command -v podman >/dev/null 2>&1; then
+    echo podman
+  else
+    log_err "Neither docker nor podman found in PATH. Set DOCKER_CMD or run this on the host where the stack is deployed."
+    exit 1
+  fi
+}
+
+ENGINE="$(pick_engine)"
+log_info "Using container engine: $ENGINE"
+
+CONTAINER=""
+for name in "${CANDIDATE_NAMES[@]}"; do
+  if $ENGINE container inspect "$name" >/dev/null 2>&1; then
+    CONTAINER="$name"
+    break
+  fi
+done
+
+if [[ -z "$CONTAINER" ]]; then
+  log_err "Could not find a running backend container (tried: ${CANDIDATE_NAMES[*]})."
+  log_info "Pass the container name explicitly: ./scripts/fix-missing-tables.sh <container_name>"
+  log_info "List containers with: $ENGINE ps"
+  exit 1
+fi
+
+if [[ "$($ENGINE container inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]]; then
+  log_err "Container '$CONTAINER' exists but is not running. Start it first: $ENGINE start $CONTAINER"
+  exit 1
+fi
+
+log_ok "Found running backend container: $CONTAINER"
+log_info "Creating any missing tables (existing tables/data are left untouched)..."
+
+if $ENGINE exec "$CONTAINER" python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine); print('Tables present: ' + ', '.join(sorted(Base.metadata.tables.keys())))"; then
+  log_ok "Database schema is up to date."
+else
+  log_err "create_all() failed inside the container. Check DB connectivity: $ENGINE logs $CONTAINER"
+  exit 1
+fi
+
+echo ""
+log_info "Try logging in again now."
+log_info "If login now fails with 'user not found' instead of a 500, the schema was the"
+log_info "only problem, but no admin user was seeded. Check: $ENGINE logs $CONTAINER | grep -i seed"
+log_info "and that SEED_INITIAL_ADMIN / INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD were set"
+log_info "when the backend container was created."

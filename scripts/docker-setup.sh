@@ -69,7 +69,7 @@ view_logs() {
 # Function to initialize database
 init_database() {
     echo "Initializing database..."
-    docker exec recruit_backend python -c "from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
+    docker exec recruit_backend python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
     echo "Database initialized!"
 }
 

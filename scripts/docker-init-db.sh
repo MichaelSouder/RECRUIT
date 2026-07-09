@@ -12,7 +12,7 @@ done
 echo "PostgreSQL is ready!"
 
 echo "Creating database tables..."
-python -c "from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
+python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
 
 echo "Running migration scripts..."
 # Add assessment_time column if it doesn't exist
