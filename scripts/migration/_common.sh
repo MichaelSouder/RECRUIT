@@ -42,7 +42,8 @@ podman_psql() {
   local container="${PODMAN_CONTAINER:?Set PODMAN_CONTAINER (e.g. postgres)}"
   local user="${PGUSER:-postgres}"
   local db="${PGDATABASE:-postgres}"
-  podman exec -e PGPASSWORD="${PGPASSWORD:-postgres}" "$container" \
+  local engine="${CONTAINER_ENGINE:-podman}"
+  "$engine" exec -e PGPASSWORD="${PGPASSWORD:-postgres}" "$container" \
     psql -U "$user" -d "$db" -v ON_ERROR_STOP=1 "$@"
 }
 
