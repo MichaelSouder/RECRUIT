@@ -95,3 +95,7 @@ Try logging in again.
   `docs/AIRGAP_DEPLOY.md` section 11), or register a user via
   `POST /api/v1/auth/register` and then promote it to admin directly in the
   database.
+
+This script only gets you an empty schema (plus maybe one admin user). If the
+server needs the real production dataset (subjects, studies, assessments,
+etc.), that's a separate step — see `data/backups/README.md`.

@@ -8,7 +8,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_BASELINE="${REPO_ROOT}/data/migration_verify_baseline.json"
 DEFAULT_BACKUPS="${REPO_ROOT}/data/backups"
-DEFAULT_DUMP_BASE="recruit_prod_cutover_20260521T1455Z"
+DEFAULT_DUMP_BASE="recruit_prod_cutover_20260709T1422Z"
 
 need_cmd() {
   local c

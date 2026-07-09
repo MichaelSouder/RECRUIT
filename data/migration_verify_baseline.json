@@ -1,19 +1,18 @@
 {
+  "generated_at": "2026-07-09T14:47:17Z",
+  "note": "Compare after pg_restore: scripts/migration/migration-verify.sh",
   "alembic_head": "d1e4f9a02b11",
   "counts": {
+    "subjects": 55829,
+    "studies": 52,
     "assessments": 390503,
     "legacy_id_map": 451592,
     "session_notes": 4354,
-    "studies": 52,
     "study_procedures": 162,
-    "subject_study": 5959,
-    "subjects": 55829,
-    "user_study": 118,
-    "users": 37
+    "user_study": 120,
+    "users": 37,
+    "subject_study": 5959
   },
-  "cutover_audit_log_present": true,
-  "duplicate_arc_proc_extras": 0,
-  "generated_at": "2026-05-21T14:57:47Z",
   "legacy_id_map_by_source": {
     "arc/auth_user": 5,
     "arc/consensusdxes": 1281,
@@ -138,6 +137,7 @@
     "dvbic_research/visual_acuity": 1639,
     "dvbic_research/ymrs_raw": 73
   },
+  "duplicate_arc_proc_extras": 0,
   "migration_events_rows": 4526354,
-  "note": "Compare prod DB after pg_restore with: python -m migrations_cli migration-verify"
+  "cutover_audit_log_present": true
 }
