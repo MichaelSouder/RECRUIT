@@ -76,6 +76,7 @@ fi
 
 log_ok "Found running backend container: $CONTAINER"
 log_info "Creating any missing tables (existing tables/data are left untouched)..."
+log_info "Note: this only creates empty table structures. It loads no data/rows."
 
 if $ENGINE exec "$CONTAINER" python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(bind=engine); print('Tables present: ' + ', '.join(sorted(Base.metadata.tables.keys())))"; then
   log_ok "Database schema is up to date."
@@ -84,9 +85,40 @@ else
   exit 1
 fi
 
+user_count() {
+  $ENGINE exec "$CONTAINER" python -c "from app.database import SessionLocal; from app.models.user import User; db = SessionLocal(); print(db.query(User).count()); db.close()" 2>/dev/null | tr -d '[:space:]'
+}
+
+COUNT="$(user_count || echo "")"
+if [[ "$COUNT" == "0" ]]; then
+  log_info "users table is empty. The initial-admin seed only runs once, at container"
+  log_info "startup — and it already ran (and silently failed) before these tables existed."
+  log_info "Restarting '$CONTAINER' so the seed step runs again now that tables exist..."
+  $ENGINE restart "$CONTAINER" >/dev/null
+  log_info "Waiting for the seed step to run..."
+  for _ in $(seq 1 30); do
+    sleep 1
+    if [[ "$($ENGINE container inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" == "true" ]]; then
+      NEW_COUNT="$(user_count || echo "")"
+      if [[ -n "$NEW_COUNT" && "$NEW_COUNT" != "0" ]]; then
+        log_ok "Admin user seeded ($NEW_COUNT user(s) now in the database)."
+        COUNT="$NEW_COUNT"
+        break
+      fi
+    fi
+  done
+  if [[ "$COUNT" == "0" ]]; then
+    log_err "Still no users after restart. Check: $ENGINE logs $CONTAINER | grep -i seed"
+    log_info "Confirm SEED_INITIAL_ADMIN=true and INITIAL_ADMIN_PASSWORD were set when the"
+    log_info "backend container was created — if not, recreate it with those variables set"
+    log_info "(see docs/AIRGAP_DEPLOY.md section 11), or register a user via"
+    log_info "POST /api/v1/auth/register and promote it to admin in the database."
+  fi
+elif [[ -z "$COUNT" ]]; then
+  log_err "Could not check user count. Check: $ENGINE logs $CONTAINER"
+else
+  log_ok "users table already has $COUNT user(s) — nothing to seed."
+fi
+
 echo ""
 log_info "Try logging in again now."
-log_info "If login now fails with 'user not found' instead of a 500, the schema was the"
-log_info "only problem, but no admin user was seeded. Check: $ENGINE logs $CONTAINER | grep -i seed"
-log_info "and that SEED_INITIAL_ADMIN / INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD were set"
-log_info "when the backend container was created."

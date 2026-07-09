@@ -67,25 +67,31 @@ The script:
    a name explicitly as the first argument if yours differs, e.g.
    `./scripts/fix-missing-tables.sh my_backend`).
 3. Runs `create_all()` inside it, correctly importing `app.models` first.
-4. Prints the resulting list of tables.
+   **This only creates empty table structures — it loads no data.**
+4. Checks whether the `users` table is empty. If it is, restarts the backend
+   container so the initial-admin seed step (`app/startup_seed.py`, which
+   only runs once at container startup) runs again — it already ran and
+   silently failed the first time, before the tables existed.
+5. Confirms a user now exists after the restart.
 
 It's safe to re-run — `create_all()` only creates tables that don't already
-exist and never touches existing data.
+exist and never touches existing data, and the seed step only creates an
+admin user when the `users` table is empty.
 
 ## After running the script
 
 Try logging in again.
 
-- If it now works, you're done.
-- If it now fails with "Incorrect email or password" instead of a 500, the
-  schema was the only problem, but no admin user exists yet (nothing to seed
-  it if `SEED_INITIAL_ADMIN` wasn't set when the backend container was first
-  created). Check:
+- If the script reported an admin user was seeded (or that users already
+  existed), login should work now with the credentials from
+  `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD`.
+- If it reported "Still no users after restart", `SEED_INITIAL_ADMIN` or
+  `INITIAL_ADMIN_PASSWORD` likely weren't set when the backend container was
+  created. Check:
   ```bash
   docker logs backend | grep -i seed
   ```
-  and confirm `SEED_INITIAL_ADMIN=true`, `INITIAL_ADMIN_EMAIL`, and
-  `INITIAL_ADMIN_PASSWORD` were set on that container. If not, recreate the
-  backend container with those variables set (see `docs/AIRGAP_DEPLOY.md`
-  section 11), or register a user via `POST /api/v1/auth/register` and then
-  promote it to admin directly in the database.
+  Recreate the backend container with those variables set (see
+  `docs/AIRGAP_DEPLOY.md` section 11), or register a user via
+  `POST /api/v1/auth/register` and then promote it to admin directly in the
+  database.
