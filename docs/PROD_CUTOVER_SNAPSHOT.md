@@ -66,16 +66,18 @@ python -m migrations_cli deploy-check
 
 **Podman one-shot** (assemble parts → copy into container → `pg_restore` → verify):
 
-```bash
-chmod +x scripts/migration/*.sh
-export PODMAN_CONTAINER=postgres    # podman ps — your Postgres container name
-export PGDATABASE=recruit_db
-export PGPASSWORD=postgres
-# If Postgres port is published on the host:
-export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/recruit_db'
+Defaults already match this checklist (`PODMAN_CONTAINER=postgres`,
+`PGDATABASE=recruit_db`, `PGPASSWORD=postgres`), and the scripts are tracked
+executable in git, so after `git pull` this is the whole command:
 
+```bash
 ./scripts/migration/prod-restore-podman.sh
 ```
+
+Only export `PODMAN_CONTAINER` / `PGDATABASE` / `PGPASSWORD` if your target
+differs from the above (check the actual name with `podman ps`). `pg_restore`
+now runs with `--clean --if-exists`, so it's safe to run even if the target
+already has an empty schema or a seeded admin user from a fresh deploy.
 
 **Step by step:**
 

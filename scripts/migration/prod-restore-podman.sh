@@ -100,8 +100,12 @@ echo "Copying dump into container (${REMOTE}) ..."
 podman cp "$DUMP" "${PODMAN_CONTAINER}:${REMOTE}"
 
 echo "Running pg_restore into ${PGDATABASE} ..."
+# --clean --if-exists: the target may already have tables/rows (e.g. an empty
+# schema or a seeded admin user from a fresh deploy's create_all()/seed step).
+# Drop those first so the restore is a clean, repeatable full replacement
+# rather than colliding with pre-existing primary keys.
 podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
-  pg_restore -U "$PGUSER" -d "$PGDATABASE" --no-owner --no-acl --verbose "$REMOTE" \
+  pg_restore -U "$PGUSER" -d "$PGDATABASE" --clean --if-exists --no-owner --no-acl --verbose "$REMOTE" \
   || {
     # pg_restore may exit 1 with warnings; treat as success if DB has core tables
     if podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \

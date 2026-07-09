@@ -26,18 +26,27 @@ Use `--base <name>` (or `DUMP_BASE=<name>`) with the scripts below to restore an
 
 ## Podman: assemble + restore + verify
 
-From repo root after `git pull`:
+Defaults already match how `airgap-stack-up.sh` names things
+(`PODMAN_CONTAINER=postgres`, `PGDATABASE=recruit_db`, `PGUSER=postgres`,
+`PGPASSWORD=postgres`), and these scripts are tracked executable in git, so
+on a standard deploy this is the entire command, from repo root:
 
 ```bash
-chmod +x scripts/migration/*.sh data/backups/assemble_recruit_dump.sh
+git pull
+./scripts/migration/prod-restore-podman.sh
+```
 
-# Optional: Postgres published on host :5432
-export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/recruit_db'
+This assembles the dump, restores it (`--clean --if-exists`, so it's safe to
+run against a target that already has an empty schema or a seeded admin
+user), and runs `migration-verify.sh` automatically.
 
-export PODMAN_CONTAINER=postgres   # your container name: podman ps
-export PGDATABASE=recruit_db
-export PGPASSWORD=postgres
+Only override the environment if your setup differs from the above
+(different container name, database, or credentials):
 
+```bash
+export PODMAN_CONTAINER=<your container name>   # check: podman ps
+export PGDATABASE=<your database name>
+export PGPASSWORD=<your password>
 ./scripts/migration/prod-restore-podman.sh
 ```
 
@@ -49,14 +58,9 @@ Or step by step:
 ./scripts/migration/migration-verify.sh
 ```
 
-If Postgres is only reachable via Podman (no host port):
-
-```bash
-unset DATABASE_URL
-export PODMAN_CONTAINER=postgres
-export PGDATABASE=recruit_db
-./scripts/migration/migration-verify.sh
-```
+If verifying separately with Postgres published on the host, set
+`DATABASE_URL` first; `migration-verify.sh` falls back to `podman exec` via
+`PODMAN_CONTAINER` when `DATABASE_URL` is unset.
 
 Set `CONTAINER_ENGINE=docker` before these commands if your target Postgres
 runs under Docker instead of Podman (`PODMAN_CONTAINER` is still the variable
