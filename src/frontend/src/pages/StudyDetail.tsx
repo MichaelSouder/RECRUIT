@@ -165,6 +165,9 @@ export const StudyDetail: React.FC = () => {
   const downloadJSON = () => {
     if (!study) return;
 
+    // Normalize: nest each subject's session notes and assessments directly
+    // under that subject, so the export reflects the actual relationship
+    // instead of three parallel lists joined only by a bare subject_id.
     const studyData = {
       study: {
         id: study.id,
@@ -186,33 +189,37 @@ export const StudyDetail: React.FC = () => {
         sex: subject.sex,
         ssn: subject.ssn,
         race: subject.race,
+        ethnicity: subject.ethnicity,
         death_date: subject.death_date,
         county: subject.county,
         zip: subject.zip,
+        enrollment_status: subject.enrollment_status,
         created_at: subject.created_at,
         updated_at: subject.updated_at,
-      })),
-      session_notes: sessionNotes.map(note => ({
-        id: note.id,
-        subject_id: note.subject_id,
-        session_date: note.session_date,
-        notes: note.notes,
-        created_at: note.created_at,
-        updated_at: note.updated_at,
-        created_by: note.created_by,
-      })),
-      assessments: assessments.map(assessment => ({
-        id: assessment.id,
-        subject_id: assessment.subject_id,
-        study_id: assessment.study_id,
-        assessment_type: assessment.assessment_type,
-        assessment_date: assessment.assessment_date,
-        total_score: assessment.total_score,
-        notes: assessment.notes,
-        data: assessment.data,
-        created_at: assessment.created_at,
-        updated_at: assessment.updated_at,
-        created_by: assessment.created_by,
+        session_notes: sessionNotes
+          .filter(note => note.subject_id === subject.id)
+          .map(note => ({
+            id: note.id,
+            session_date: note.session_date,
+            notes: note.notes,
+            created_at: note.created_at,
+            updated_at: note.updated_at,
+            created_by: note.created_by,
+          })),
+        assessments: assessments
+          .filter(assessment => assessment.subject_id === subject.id)
+          .map(assessment => ({
+            id: assessment.id,
+            assessment_type: assessment.assessment_type,
+            assessment_date: assessment.assessment_date,
+            assessment_time: assessment.assessment_time,
+            total_score: assessment.total_score,
+            notes: assessment.notes,
+            data: assessment.data,
+            created_at: assessment.created_at,
+            updated_at: assessment.updated_at,
+            created_by: assessment.created_by,
+          })),
       })),
       export_date: new Date().toISOString(),
     };
@@ -241,6 +248,13 @@ export const StudyDetail: React.FC = () => {
       return str;
     };
 
+    // Look up each subject's name so notes/assessments carry a human-readable
+    // link back to the subject rather than just a bare subject_id.
+    const subjectName = (subjectId: number): string => {
+      const subject = subjects.find(s => s.id === subjectId);
+      return subject ? `${subject.last_name}, ${subject.first_name}` : '';
+    };
+
     // Create CSV content
     let csvContent = `Study: ${study.name}\n`;
     csvContent += `Description: ${study.description || ''}\n`;
@@ -251,26 +265,26 @@ export const StudyDetail: React.FC = () => {
 
     // Subjects CSV
     csvContent += `=== SUBJECTS ===\n`;
-    csvContent += `ID,First Name,Middle Name,Last Name,Date of Birth,Sex,SSN,Race,Death Date,County,Zip\n`;
+    csvContent += `ID,First Name,Middle Name,Last Name,Date of Birth,Sex,SSN,Race,Ethnicity,Death Date,County,Zip,Enrollment Status\n`;
     subjects.forEach(subject => {
-      csvContent += `${subject.id},${escapeCSV(subject.first_name)},${escapeCSV(subject.middle_name)},${escapeCSV(subject.last_name)},${escapeCSV(subject.date_of_birth)},${escapeCSV(subject.sex)},${escapeCSV(subject.ssn)},${escapeCSV(subject.race)},${escapeCSV(subject.death_date)},${escapeCSV(subject.county)},${escapeCSV(subject.zip)}\n`;
+      csvContent += `${subject.id},${escapeCSV(subject.first_name)},${escapeCSV(subject.middle_name)},${escapeCSV(subject.last_name)},${escapeCSV(subject.date_of_birth)},${escapeCSV(subject.sex)},${escapeCSV(subject.ssn)},${escapeCSV(subject.race)},${escapeCSV(subject.ethnicity)},${escapeCSV(subject.death_date)},${escapeCSV(subject.county)},${escapeCSV(subject.zip)},${escapeCSV(subject.enrollment_status)}\n`;
     });
     csvContent += `\n`;
 
-    // Session Notes CSV
+    // Session Notes CSV - joined to the subject by ID and name
     csvContent += `=== SESSION NOTES ===\n`;
-    csvContent += `ID,Subject ID,Session Date,Notes\n`;
+    csvContent += `ID,Subject ID,Subject Name,Session Date,Notes\n`;
     sessionNotes.forEach(note => {
-      csvContent += `${note.id},${note.subject_id},${escapeCSV(note.session_date)},${escapeCSV(note.notes)}\n`;
+      csvContent += `${note.id},${note.subject_id},${escapeCSV(subjectName(note.subject_id))},${escapeCSV(note.session_date)},${escapeCSV(note.notes)}\n`;
     });
     csvContent += `\n`;
 
-    // Assessments CSV
+    // Assessments CSV - joined to the subject by ID and name
     csvContent += `=== ASSESSMENTS ===\n`;
-    csvContent += `ID,Subject ID,Study ID,Assessment Type,Assessment Date,Total Score,Notes,Additional Data\n`;
+    csvContent += `ID,Subject ID,Subject Name,Study ID,Assessment Type,Assessment Date,Assessment Time,Total Score,Notes,Additional Data\n`;
     assessments.forEach(assessment => {
       const additionalData = assessment.data ? JSON.stringify(assessment.data) : '';
-      csvContent += `${assessment.id},${assessment.subject_id},${escapeCSV(assessment.study_id)},${escapeCSV(assessment.assessment_type)},${escapeCSV(assessment.assessment_date)},${escapeCSV(assessment.total_score)},${escapeCSV(assessment.notes)},${escapeCSV(additionalData)}\n`;
+      csvContent += `${assessment.id},${assessment.subject_id},${escapeCSV(subjectName(assessment.subject_id))},${escapeCSV(assessment.study_id)},${escapeCSV(assessment.assessment_type)},${escapeCSV(assessment.assessment_date)},${escapeCSV(assessment.assessment_time)},${escapeCSV(assessment.total_score)},${escapeCSV(assessment.notes)},${escapeCSV(additionalData)}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

@@ -6,9 +6,19 @@ psycopg2-binary==2.9.9
 fpdf2==2.8.2
 redis==5.0.1
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+cryptography==42.0.5
+# bcrypt is imported directly by app/core/security.py (password hashing). It used to be
+# pulled in transitively via passlib[bcrypt]; passlib was dropped, so pin bcrypt explicitly
+# or a fresh `pip install -r requirements.txt` produces an image that can't import the app.
+bcrypt==5.0.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 python-multipart==0.0.6
 email-validator==2.1.0
+slowapi==0.1.10
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+httpx==0.25.1
 

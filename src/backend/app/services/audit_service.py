@@ -18,9 +18,11 @@ class AuditService:
             # Handle datetime objects
             if isinstance(value, datetime):
                 return value.isoformat()
-            # Handle dict/list - convert to JSON
+            # Handle dict/list - convert to JSON. default=str so nested date/time/Decimal
+            # values (e.g. an assessment payload's assessment_date) serialize to strings
+            # instead of raising TypeError and falling through to a non-JSON Python repr.
             if isinstance(value, (dict, list)):
-                return json.dumps(value)
+                return json.dumps(value, default=str)
             # Handle other types - convert to string then JSON
             return json.dumps(str(value))
         except (TypeError, ValueError):

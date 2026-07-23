@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Any, Optional
 from datetime import date, datetime, time
 
 
@@ -11,6 +11,7 @@ class AssessmentBase(BaseModel):
     assessment_time: Optional[time] = None
     total_score: Optional[float] = None
     notes: Optional[str] = None
+    data: Optional[dict[str, Any]] = None
 
 
 class AssessmentCreate(AssessmentBase):
@@ -24,6 +25,7 @@ class AssessmentUpdate(BaseModel):
     assessment_time: Optional[time] = None
     total_score: Optional[float] = None
     notes: Optional[str] = None
+    data: Optional[dict[str, Any]] = None
 
 
 class Assessment(AssessmentBase):
@@ -31,10 +33,6 @@ class Assessment(AssessmentBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
-    
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+
+    model_config = ConfigDict(from_attributes=True)
 

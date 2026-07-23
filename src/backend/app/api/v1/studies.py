@@ -6,7 +6,15 @@ from app.models.study import Study
 from app.models.user import User
 from app.schemas.study import StudyCreate, StudyUpdate, Study as StudySchema
 from app.schemas.common import PaginatedResponse
-from app.api.dependencies import get_current_active_user, require_study_access, get_audit_context
+from app.api.dependencies import (
+    get_current_active_user,
+    get_current_admin_user,
+    get_current_researcher_user,
+    require_study_access,
+    require_study_write_access,
+    require_study_manage_access,
+    get_audit_context,
+)
 from app.services.audit_service import AuditService
 from typing import Dict
 
@@ -134,7 +142,8 @@ def get_study(
 def create_study(
     study_data: StudyCreate,
     db: Session = Depends(get_db),
-    audit_context: Dict = Depends(get_audit_context)
+    audit_context: Dict = Depends(get_audit_context),
+    _: User = Depends(get_current_researcher_user),
 ):
     """Create a new study"""
     # Check if study name already exists
@@ -180,7 +189,9 @@ def update_study(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Study not found"
         )
-    
+
+    require_study_manage_access(study_id, audit_context['user'], db)
+
     # Check name uniqueness if name is being updated
     if study_data.name and study_data.name != db_study.name:
         existing = db.query(Study).filter(Study.name == study_data.name).first()
@@ -223,7 +234,8 @@ def update_study(
 def delete_study(
     study_id: int,
     db: Session = Depends(get_db),
-    audit_context: Dict = Depends(get_audit_context)
+    audit_context: Dict = Depends(get_audit_context),
+    _: User = Depends(get_current_admin_user),
 ):
     """Delete a study"""
     db_study = db.query(Study).filter(Study.id == study_id).first()

@@ -15,11 +15,27 @@ import { CalendarPage } from '../pages/Calendar';
 import { Admin } from '../pages/Admin';
 import { Profile } from '../pages/Profile';
 import App from '../App';
+import { useAuthStore } from '../store/authStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('access_token');
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated } = useAuthStore();
+  if (!isAuthenticated || !localStorage.getItem('access_token')) {
+    return <Navigate to="/login" replace />;
+  }
+  // User data still loading — render nothing to avoid a flash redirect
+  if (!user) {
+    return null;
+  }
+  if (!user.is_superuser && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 };
@@ -102,7 +118,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'admin',
-        element: <Admin />,
+        element: (
+          <AdminRoute>
+            <Admin />
+          </AdminRoute>
+        ),
       },
       {
         path: 'profile',

@@ -76,11 +76,11 @@ def check_study_access(study_id: Optional[int], current_user: User, db: Session)
     # Admins and superusers have access to all studies
     if current_user.is_superuser or current_user.role == "admin":
         return True
-    
+
     # If no study_id, allow (will be filtered by accessible studies)
     if study_id is None:
         return True
-    
+
     # Refresh memberships so study access reflects latest assignments
     db.refresh(current_user, ["study_memberships"])
 
@@ -94,6 +94,63 @@ def require_study_access(study_id: Optional[int], current_user: User, db: Sessio
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this study"
+        )
+
+
+def _get_study_membership(study_id: int, current_user: User, db: Session):
+    """Return the UserStudy membership row for current_user in study_id, or None."""
+    db.refresh(current_user, ["study_memberships"])
+    return next((m for m in current_user.study_memberships if m.study_id == study_id), None)
+
+
+def check_study_write_access(study_id: Optional[int], current_user: User, db: Session) -> bool:
+    """Check if user can write data within a study (create/edit subjects, assessments, notes).
+
+    Requires global researcher role + study_role of researcher or admin for the study.
+    Global admins/superusers always pass.
+    """
+    if current_user.is_superuser or current_user.role == "admin":
+        return True
+    if current_user.role != "researcher":
+        return False
+    if study_id is None:
+        return True
+    membership = _get_study_membership(study_id, current_user, db)
+    if membership is None:
+        return False
+    return membership.study_role in ("researcher", "admin")
+
+
+def require_study_write_access(study_id: Optional[int], current_user: User, db: Session):
+    """Require write access to a study; raise 403 otherwise."""
+    if not check_study_write_access(study_id, current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have write access to this study"
+        )
+
+
+def check_study_manage_access(study_id: int, current_user: User, db: Session) -> bool:
+    """Check if user can manage a study's own metadata (update/delete the study record).
+
+    Requires global admin, OR global researcher with study_role='admin' for that study.
+    """
+    if current_user.is_superuser or current_user.role == "admin":
+        return True
+    if current_user.role != "researcher":
+        return False
+    membership = _get_study_membership(study_id, current_user, db)
+    if membership is None:
+        return False
+    return membership.study_role == "admin"
+
+
+def require_study_manage_access(study_id: int, current_user: User, db: Session):
+    """Require study-management access; raise 403 otherwise."""
+    if not check_study_manage_access(study_id, current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to manage this study"
         )
 
 

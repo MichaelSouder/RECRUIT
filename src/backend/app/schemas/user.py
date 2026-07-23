@@ -1,27 +1,26 @@
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import List, Optional
-import re
+
+
+def lowercase_email(v: Optional[str]) -> Optional[str]:
+    """Lowercase/strip so DB lookups (User.email == ...) stay case-insensitive-in-practice."""
+    if v is None:
+        return v
+    return v.lower().strip()
 
 
 class UserBase(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    
-    email: str
+
+    email: EmailStr
     full_name: Optional[str] = None
     location: Optional[str] = None
     phone: Optional[str] = None
-    
+
     @field_validator('email')
     @classmethod
-    def validate_email(cls, v: str) -> str:
-        """Validate and normalize email"""
-        if isinstance(v, str):
-            # Check basic email format
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-            if not re.match(email_pattern, v):
-                raise ValueError('Invalid email format')
-            return v.lower().strip()
-        return v
+    def normalize_email(cls, v: str) -> str:
+        return lowercase_email(v)
 
 
 class UserCreate(UserBase):
@@ -30,21 +29,14 @@ class UserCreate(UserBase):
 
 class UserLogin(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, str_strip_whitespace=True)
-    
-    email: str
+
+    email: EmailStr
     password: str
-    
+
     @field_validator('email')
     @classmethod
-    def validate_email(cls, v: str) -> str:
-        """Validate and normalize email"""
-        if isinstance(v, str):
-            # Check basic email format
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-            if not re.match(email_pattern, v):
-                raise ValueError('Invalid email format')
-            return v.lower().strip()
-        return v
+    def normalize_email(cls, v: str) -> str:
+        return lowercase_email(v)
 
 
 class UserUpdate(BaseModel):
@@ -61,7 +53,7 @@ class AdminUserCreate(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    email: str
+    email: EmailStr
     password: str
     full_name: Optional[str] = None
     location: Optional[str] = None
@@ -71,11 +63,8 @@ class AdminUserCreate(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, v: str) -> str:
-        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        if not re.match(email_pattern, v):
-            raise ValueError("Invalid email format")
-        return v.lower().strip()
+    def normalize_email(cls, v: str) -> str:
+        return lowercase_email(v)
 
 
 class AdminUserUpdate(BaseModel):
@@ -83,7 +72,7 @@ class AdminUserUpdate(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     location: Optional[str] = None
     phone: Optional[str] = None
@@ -94,13 +83,8 @@ class AdminUserUpdate(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v == "":
-            return v
-        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        if not re.match(email_pattern, v):
-            raise ValueError("Invalid email format")
-        return v.lower().strip()
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return lowercase_email(v)
 
 
 class User(UserBase):
@@ -109,7 +93,5 @@ class User(UserBase):
     is_superuser: bool
     role: Optional[str] = "viewer"
     piv_certificate_id: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
 
+    model_config = ConfigDict(from_attributes=True)

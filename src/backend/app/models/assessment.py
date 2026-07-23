@@ -7,8 +7,8 @@ class Assessment(BaseModel):
     """Base assessment model - can be extended for specific assessment types"""
     __tablename__ = "assessments"
     
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
-    study_id = Column(Integer, ForeignKey("studies.id"), nullable=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    study_id = Column(Integer, ForeignKey("studies.id"), nullable=True, index=True)
     assessment_type = Column(String, nullable=False)  # References assessment_types.name
     assessment_date = Column(Date, nullable=False)
     assessment_time = Column(Time, nullable=True)

@@ -1,28 +1,21 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
-import re
+
+from app.schemas.user import lowercase_email
 
 
 class ProfileUpdate(BaseModel):
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     location: Optional[str] = None
     phone: Optional[str] = None
-    
+
     @field_validator('email')
     @classmethod
-    def validate_email(cls, v: str) -> str:
-        if v is None:
-            return v
-        # Allow test domains for development
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, v):
-            raise ValueError('Invalid email format')
-        return v
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return lowercase_email(v)
 
 
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
-
-

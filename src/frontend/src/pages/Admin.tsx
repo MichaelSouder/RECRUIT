@@ -928,8 +928,8 @@ export const Admin: React.FC = () => {
         onClose={closeStudyAccessModal}
         title={
           studyAccessUser
-            ? `Study access — ${studyAccessUser.email}`
-            : 'Study access'
+            ? `Study Access — ${studyAccessUser.email}`
+            : 'Study Access'
         }
         size="lg"
       >
@@ -962,11 +962,12 @@ export const Admin: React.FC = () => {
                         Study
                       </th>
                       <th className="w-44 px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">
-                        Role on study
+                        Role on Study
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">
                         Status
                       </th>
+                      <th className="w-12 px-3 py-2" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
@@ -1005,10 +1006,23 @@ export const Admin: React.FC = () => {
                               >
                                 <option value="viewer">Viewer</option>
                                 <option value="researcher">Researcher</option>
-                                <option value="admin">Study admin</option>
+                                <option value="admin">Study Admin</option>
                               </select>
                             </td>
                             <td className="px-3 py-2 text-gray-600">{study.status}</td>
+                            <td className="px-3 py-2">
+                              {assigned && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => toggleUserStudyAccess(study, false)}
+                                  className="text-red-500 hover:text-red-700 disabled:opacity-40 p-1 rounded hover:bg-red-50 transition-colors"
+                                  title={`Remove access to ${study.name}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -1018,7 +1032,7 @@ export const Admin: React.FC = () => {
             )}
             <p className="text-xs text-gray-500">
               Assign studies to control which protocols this account can open. For each study, set{' '}
-              <strong>Role on study</strong> (viewer vs researcher vs study admin). Global app admins still see all
+              <strong>Role on Study</strong> (Viewer, Researcher, or Study Admin). Global app admins still see all
               studies regardless of this list.
             </p>
           </div>

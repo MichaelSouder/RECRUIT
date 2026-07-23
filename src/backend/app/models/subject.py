@@ -1,18 +1,19 @@
 from sqlalchemy import Column, String, Date, Integer, ForeignKey
 from sqlalchemy.orm import relationship
+from app.core.encryption import EncryptedString
 from app.models.base import BaseModel
 from app.models.subject_study import subject_study
 
 
 class Subject(BaseModel):
     __tablename__ = "subjects"
-    
+
     first_name = Column(String, nullable=False)
     middle_name = Column(String, nullable=True)
     last_name = Column(String, nullable=False)
     date_of_birth = Column(Date, nullable=True)
     sex = Column(String, nullable=True)  # 'male' or 'female'
-    ssn = Column(String, nullable=True)  # Should be encrypted in production
+    ssn = Column(EncryptedString, nullable=True)  # encrypted at rest, see app/core/encryption.py
     race = Column(String, nullable=True)  # FDA-required race categories
     ethnicity = Column(String, nullable=True)  # FDA-required ethnicity categories
     death_date = Column(Date, nullable=True)

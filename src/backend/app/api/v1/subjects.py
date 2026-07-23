@@ -8,7 +8,15 @@ from app.models.subject import Subject
 from app.models.user import User
 from app.schemas.subject import SubjectCreate, SubjectUpdate, Subject as SubjectSchema
 from app.schemas.common import PaginatedResponse
-from app.api.dependencies import get_current_active_user, require_study_access, get_audit_context
+from app.api.dependencies import (
+    get_current_active_user,
+    get_current_researcher_user,
+    check_study_access,
+    require_study_access,
+    check_study_write_access,
+    require_study_write_access,
+    get_audit_context,
+)
 from app.services.audit_service import AuditService
 from typing import Dict
 
@@ -112,7 +120,16 @@ def get_subject(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subject not found"
         )
-    
+
+    current_user = audit_context['user']
+    if not (current_user.is_superuser or current_user.role == "admin"):
+        study_ids = [s.id for s in subject.studies]
+        if not study_ids or not any(check_study_access(sid, current_user, db) for sid in study_ids):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this subject's studies"
+            )
+
     # Audit log view
     entity_name = f"{subject.last_name}, {subject.first_name}"
     AuditService.log_view(
@@ -133,20 +150,26 @@ def get_subject(
 def create_subject(
     request_data: dict = Body(...),
     db: Session = Depends(get_db),
-    audit_context: Dict = Depends(get_audit_context)
+    audit_context: Dict = Depends(get_audit_context),
+    _: User = Depends(get_current_researcher_user),
 ):
     """Create a new subject"""
     from app.models.study import Study
-    
+
     # Extract study_ids if present
     study_ids = request_data.pop('study_ids', None)
-    
+
+    # Verify write access for every study the subject will be assigned to
+    if study_ids:
+        for sid in study_ids:
+            require_study_write_access(sid, audit_context['user'], db)
+
     # Create subject from remaining data
     subject_data = SubjectCreate(**request_data)
     db_subject = Subject(**subject_data.model_dump(), created_by=audit_context['user'].id)
     db.add(db_subject)
     db.flush()  # Get the ID
-    
+
     # Associate with studies if provided
     if study_ids:
         studies = db.query(Study).filter(Study.id.in_(study_ids)).all()
@@ -177,7 +200,8 @@ def update_subject(
     subject_id: int,
     subject_data: SubjectUpdate,
     db: Session = Depends(get_db),
-    audit_context: Dict = Depends(get_audit_context)
+    audit_context: Dict = Depends(get_audit_context),
+    _: User = Depends(get_current_researcher_user),
 ):
     """Update a subject"""
     db_subject = db.query(Subject).filter(Subject.id == subject_id).first()
@@ -186,7 +210,18 @@ def update_subject(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subject not found"
         )
-    
+
+    # Require write access to at least one of the subject's studies
+    current_user = audit_context['user']
+    if not (current_user.is_superuser or current_user.role == "admin"):
+        study_ids = [s.id for s in db_subject.studies]
+        if study_ids:
+            if not any(check_study_write_access(sid, current_user, db) for sid in study_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have write access to this subject's studies",
+                )
+
     # Track changes
     changes = {}
     update_data = subject_data.model_dump(exclude_unset=True)
@@ -221,7 +256,8 @@ def update_subject(
 def delete_subject(
     subject_id: int,
     db: Session = Depends(get_db),
-    audit_context: Dict = Depends(get_audit_context)
+    audit_context: Dict = Depends(get_audit_context),
+    _: User = Depends(get_current_researcher_user),
 ):
     """Delete a subject"""
     db_subject = db.query(Subject).filter(Subject.id == subject_id).first()
@@ -230,7 +266,18 @@ def delete_subject(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subject not found"
         )
-    
+
+    # Require write access to at least one of the subject's studies
+    current_user = audit_context['user']
+    if not (current_user.is_superuser or current_user.role == "admin"):
+        study_ids = [s.id for s in db_subject.studies]
+        if study_ids:
+            if not any(check_study_write_access(sid, current_user, db) for sid in study_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have write access to this subject's studies",
+                )
+
     # Capture entity data before deletion
     entity_name = f"{db_subject.last_name}, {db_subject.first_name}"
     entity_data = {
@@ -238,7 +285,7 @@ def delete_subject(
         'last_name': db_subject.last_name,
         'middle_name': db_subject.middle_name,
         'date_of_birth': db_subject.date_of_birth.isoformat() if db_subject.date_of_birth else None,
-        'gender': db_subject.gender,
+        'sex': db_subject.sex,
         'created_by': db_subject.created_by
     }
     

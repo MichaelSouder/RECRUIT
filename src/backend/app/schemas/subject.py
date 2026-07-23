@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import date, datetime
 
@@ -42,10 +42,6 @@ class Subject(SubjectBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
-    
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+
+    model_config = ConfigDict(from_attributes=True)
 

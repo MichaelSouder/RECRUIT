@@ -8,6 +8,7 @@ from app.schemas.user import UserCreate, UserLogin, User as UserSchema, UserUpda
 from app.schemas.profile import ProfileUpdate, PasswordChange
 from app.schemas.common import Token
 from app.core.security import verify_password, get_password_hash, create_access_token
+from app.core.rate_limit import limiter
 from app.api.dependencies import get_current_active_user, get_audit_context
 from app.services.audit_service import AuditService
 from fastapi import Request
@@ -16,6 +17,15 @@ from app.config import settings
 from pydantic import BaseModel
 
 router = APIRouter()
+
+
+def _request_audit_fields(request: Request) -> Dict[str, Optional[str]]:
+    """Pull the ip/user-agent/session-id context AuditMiddleware stashed on request.state."""
+    return {
+        "ip_address": getattr(request.state, "ip_address", None) if hasattr(request, "state") else None,
+        "user_agent": getattr(request.state, "user_agent", None) if hasattr(request, "state") else None,
+        "session_id": getattr(request.state, "session_id", None) if hasattr(request, "state") else None,
+    }
 
 
 @router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
@@ -45,33 +55,25 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("5/minute")
 def login(
     user_data: UserLogin,
     request: Request,
     db: Session = Depends(get_db)
 ):
     """Login and get access token"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    # Email is already lowercased by the validator
-    logger.info(f"Login attempt for email: {user_data.email}")
     user = db.query(User).filter(User.email == user_data.email).first()
-    
+
     if not user:
-        logger.warning(f"User not found: {user_data.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    logger.info(f"User found: {user.email}, is_active: {user.is_active}")
+
     password_valid = verify_password(user_data.password, user.hashed_password)
-    logger.info(f"Password verification result: {password_valid}")
-    
+
     if not password_valid:
-        logger.warning(f"Password verification failed for user: {user.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -90,18 +92,8 @@ def login(
     )
     
     # Audit log login
-    ip_address = getattr(request.state, 'ip_address', None) if hasattr(request, 'state') else None
-    user_agent = getattr(request.state, 'user_agent', None) if hasattr(request, 'state') else None
-    session_id = getattr(request.state, 'session_id', None) if hasattr(request, 'state') else None
-    
-    AuditService.log_login(
-        db=db,
-        user=user,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        session_id=session_id
-    )
-    
+    AuditService.log_login(db=db, user=user, **_request_audit_fields(request))
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -110,6 +102,7 @@ class PIVLoginRequest(BaseModel):
 
 
 @router.post("/login-piv", response_model=Token)
+@limiter.limit("5/minute")
 def login_piv(
     piv_data: PIVLoginRequest,
     request: Request,
@@ -138,19 +131,20 @@ def login_piv(
     )
     
     # Audit log login
-    ip_address = getattr(request.state, 'ip_address', None) if hasattr(request, 'state') else None
-    user_agent = getattr(request.state, 'user_agent', None) if hasattr(request, 'state') else None
-    session_id = getattr(request.state, 'session_id', None) if hasattr(request, 'state') else None
-    
-    AuditService.log_login(
-        db=db,
-        user=user,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        session_id=session_id
-    )
-    
+    AuditService.log_login(db=db, user=user, **_request_audit_fields(request))
+
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Audit-log a logout. JWTs are stateless and not server-revoked by this call."""
+    AuditService.log_logout(db=db, user=current_user, **_request_audit_fields(request))
+    return None
 
 
 @router.get("/me", response_model=UserSchema)
