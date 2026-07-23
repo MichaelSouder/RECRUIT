@@ -29,8 +29,9 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
-  Requires DATABASE_URL or Podman (PODMAN_CONTAINER, PGUSER, PGDATABASE, PGPASSWORD).
-  Requires: psql or podman, jq
+  Requires DATABASE_URL or a container engine (PODMAN_CONTAINER, PGUSER, PGDATABASE, PGPASSWORD,
+  CONTAINER_ENGINE=docker|podman, default podman).
+  Requires: psql or docker/podman, jq
 
 Options:
   --baseline PATH     Baseline JSON (default: data/migration_verify_baseline.json)
@@ -53,7 +54,7 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
   need_cmd psql
   scalar() { recruit_scalar "$1"; }
 else
-  need_cmd podman
+  need_cmd "${CONTAINER_ENGINE:-podman}"
   : "${PODMAN_CONTAINER:?Set DATABASE_URL or PODMAN_CONTAINER}"
   scalar() { podman_scalar "$1"; }
 fi

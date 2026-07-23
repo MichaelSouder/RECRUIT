@@ -5,6 +5,7 @@ services:
   backend:
     environment:
       - SECRET_KEY=your-local-secret-key
+      - SSN_ENCRYPTION_KEY=your-local-ssn-encryption-key-32-chars
       - DEBUG=true
     # Uncomment to use SQLite instead of PostgreSQL
     # environment:

@@ -2,7 +2,7 @@
 
 This folder is where **`scripts/export-container-images.sh`** writes **`.tar`** archives. A full deployment needs **four** images — **PostgreSQL**, **Redis**, **recruit-backend**, and **recruit-frontend**.
 
-**Primary guide:** **`docs/AIRGAP_DEPLOY.md`** (end-to-end: bundle, transfer, load, `docker run` / `podman run`, verification). Each export also copies **`AIRGAP_DEPLOY.md`**, **`load-container-images.sh`**, **`airgap-stack-up.sh`**, and **`recruit-airgap.env.example`** (copy to **`recruit-airgap.env`** for local secrets) into **`output/container-images/`** so the transfer folder is self-contained.
+**Primary guide:** **`docs/AIRGAP_DEPLOY.md`** (end-to-end: bundle, transfer, load, `docker run` / `podman run`, verification). Each export also copies **`AIRGAP_DEPLOY.md`**, **`airgap-cli`** (+ its **`airgap/`** package — Python 3 standard library only, no `pip install` needed), and **`recruit-airgap.env.example`** (copy to **`recruit-airgap.env`** for local secrets) into **`output/container-images/`** so the transfer folder is self-contained.
 
 **If you clone this repository:** the `*.tar` files under `output/container-images/` are stored with **Git LFS**. Install [Git LFS](https://git-lfs.com/), run `git lfs install` once, then `git lfs pull` (or clone with a client that supports LFS) so the archives are real files, not tiny pointer stubs.
 
@@ -42,7 +42,7 @@ chmod +x scripts/pull-all-images.sh
    - **`recruit-infra-postgres-redis`** — contains **Postgres** and **Redis** `.tar` files plus `README-AIR-GAP.txt`
    - **`recruit-app-backend-frontend`** — contains **backend** and **frontend** `.tar` files, `MANIFEST.txt`, and `README-AIR-GAP.txt`
 3. Unzip both into **one** folder (e.g. `output/container-images/`) so all **four** `.tar` files sit together.
-4. Run **`./scripts/load-container-images.sh`** on that folder (see below).
+4. Run **`./scripts/airgap-cli update-containers`** on that folder (see below).
 
 If you only download the app artifact, you will **not** have Postgres or Redis — you need **both** artifacts (or a full local export).
 
@@ -68,8 +68,8 @@ Output defaults to **`output/container-images/`** (`OUTPUT_DIR` overrides).
 Put all **four** `.tar` files in one directory, then:
 
 ```bash
-chmod +x scripts/load-container-images.sh
-./scripts/load-container-images.sh /path/to/that/directory
+chmod +x scripts/airgap-cli
+./scripts/airgap-cli update-containers /path/to/that/directory
 ```
 
 Then deploy with Podman/Docker per `docs/DEPLOY_PODMAN.md` and `docker-compose.prod.yml`.

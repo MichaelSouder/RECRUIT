@@ -115,11 +115,14 @@ This will:
 Create a `.env` file in the project root or set these in docker-compose.yml:
 
 ```env
-SECRET_KEY=your-secret-key-change-in-production
+SECRET_KEY=<32+ chars, openssl rand -hex 32 — required, app refuses to start otherwise>
+SSN_ENCRYPTION_KEY=<32+ chars, different value from SECRET_KEY — encrypts Subject.ssn at rest>
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recruit_db
-REDIS_URL=redis://redis:6379/0
+REDIS_URL=redis://:<REDIS_PASSWORD>@redis:6379/0
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80
 ```
+
+See `docker-compose.yml` for how `SECRET_KEY`, `SSN_ENCRYPTION_KEY`, and `REDIS_PASSWORD` are required (no default) — Redis is published to the host and runs with `--requirepass`.
 
 ### Frontend Environment Variables
 

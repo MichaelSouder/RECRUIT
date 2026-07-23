@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Manual stack startup — runs each podman command directly without airgap-stack-up.sh.
-# Use this if airgap-stack-up.sh gives "invalid reference format".
+# Manual stack startup — runs each podman command directly without airgap-cli stack-up.
+# Use this if airgap-cli stack-up gives "invalid reference format".
 #
 # Usage (from repo root):
 #   chmod +x scripts/start-stack-manual.sh
@@ -67,6 +67,8 @@ DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/$
 
 # ── validate required secrets ─────────────────────────────────────────────────
 [[ -z "${SECRET_KEY:-}" ]]             && { echo "ERROR: SECRET_KEY not set in $ENV_FILE"; exit 1; }
+[[ -z "${SSN_ENCRYPTION_KEY:-}" ]]     && { echo "ERROR: SSN_ENCRYPTION_KEY not set in $ENV_FILE"; exit 1; }
+[[ -z "${REDIS_PASSWORD:-}" ]]         && { echo "ERROR: REDIS_PASSWORD not set in $ENV_FILE"; exit 1; }
 [[ -z "${INITIAL_ADMIN_PASSWORD:-}" ]] && { echo "ERROR: INITIAL_ADMIN_PASSWORD not set in $ENV_FILE"; exit 1; }
 
 echo ""
@@ -121,7 +123,8 @@ podman run -d \
   --network "$RECRUIT_NETWORK" \
   -p "$REDIS_PUBLISH" \
   --restart unless-stopped \
-  "$REDIS_IMAGE"
+  "$REDIS_IMAGE" \
+  redis-server --requirepass "$REDIS_PASSWORD"
 
 # ── backend ───────────────────────────────────────────────────────────────────
 echo ""
@@ -133,8 +136,9 @@ podman run -d \
   -e "DATABASE_URL=$DATABASE_URL" \
   -e "PGHOST=postgres" \
   -e "PGPORT=5432" \
-  -e "REDIS_URL=redis://redis:6379/0" \
+  -e "REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0" \
   -e "SECRET_KEY=$SECRET_KEY" \
+  -e "SSN_ENCRYPTION_KEY=$SSN_ENCRYPTION_KEY" \
   -e "ALGORITHM=HS256" \
   -e "ACCESS_TOKEN_EXPIRE_MINUTES=30" \
   -e "CORS_ORIGINS=${CORS_ORIGINS:-http://127.0.0.1:18080,http://localhost:18080}" \

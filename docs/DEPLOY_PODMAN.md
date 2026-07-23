@@ -51,7 +51,7 @@ podman volume create recruit_postgres_data
 
 **Manual pull (recommended when you have network):** see **`docs/MANUAL_PULL.md`** or run `./scripts/pull-all-images.sh` with `IMAGE_PREFIX` set—same four images, copy-paste commands for Docker/Podman and GHCR login.
 
-If you **cannot pull** (air-gapped host), follow **`docs/AIRGAP_DEPLOY.md`** (or the copy **`AIRGAP_DEPLOY.md`** next to the `.tar` files after export). You need **all four** images. From GitHub Actions, download **both** artifacts **`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**, merge the `.tar` files into one folder, then run **`load-container-images.sh`** from that folder or **`./scripts/load-container-images.sh`** from the repo.
+If you **cannot pull** (air-gapped host), follow **`docs/AIRGAP_DEPLOY.md`** (or the copy **`AIRGAP_DEPLOY.md`** next to the `.tar` files after export). You need **all four** images. From GitHub Actions, download **both** artifacts **`recruit-infra-postgres-redis`** and **`recruit-app-backend-frontend`**, merge the `.tar` files into one folder, then run **`airgap-cli update-containers`** from that folder or **`./scripts/airgap-cli update-containers`** from the repo.
 
 Otherwise, pull by hand:
 
@@ -87,13 +87,17 @@ until podman exec postgres pg_isready -U postgres; do sleep 1; done
 
 ## 6. Start Redis
 
+The port above is published to the host, so Redis runs with `--requirepass` — without it, anyone who can reach the host on `16379` has unauthenticated read/write/`FLUSHALL` access.
+
 ```bash
+export REDIS_PASSWORD="$(openssl rand -hex 32)"   # required; also referenced in step 7/8
 podman run -d \
   --name redis \
   --network recruit_network \
   -p 16379:6379 \
   --restart unless-stopped \
-  docker.io/library/redis:7-alpine
+  docker.io/library/redis:7-alpine \
+  redis-server --requirepass "${REDIS_PASSWORD}"
 ```
 
 ## 7. Secrets and environment
@@ -101,8 +105,10 @@ podman run -d \
 Set a strong JWT secret and (for **first boot** with an empty database) an initial admin password. The backend creates **`admin@example.com`** only when **`SEED_INITIAL_ADMIN=true`**, **`INITIAL_ADMIN_PASSWORD`** is non-empty, and there are **no users** yet.
 
 ```bash
-export SECRET_KEY='replace-with-a-long-random-string'
+export SECRET_KEY="$(openssl rand -hex 32)"   # backend requires 32+ chars and refuses to start otherwise
+export SSN_ENCRYPTION_KEY="$(openssl rand -hex 32)"   # encrypts Subject.ssn at rest; back this up separately from SECRET_KEY
 export INITIAL_ADMIN_PASSWORD='replace-with-a-strong-password'
+# REDIS_PASSWORD was already exported in step 6 — reused here for the backend's REDIS_URL below.
 ```
 
 ## 8. Start the backend
@@ -116,8 +122,9 @@ podman run -d \
   --name backend \
   --network recruit_network \
   -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recruit_db \
-  -e REDIS_URL=redis://redis:6379/0 \
+  -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
   -e SECRET_KEY="${SECRET_KEY}" \
+  -e SSN_ENCRYPTION_KEY="${SSN_ENCRYPTION_KEY}" \
   -e ALGORITHM=HS256 \
   -e ACCESS_TOKEN_EXPIRE_MINUTES=30 \
   -e 'CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost:18080,http://frontend:80' \

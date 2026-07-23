@@ -14,6 +14,7 @@ BACKUPS_DIR="${BACKUPS_DIR:-${DEFAULT_BACKUPS}}"
 DUMP_BASE="${DUMP_BASE:-${DEFAULT_DUMP_BASE}}"
 SKIP_VERIFY="${SKIP_VERIFY:-0}"
 CREATE_DB="${CREATE_DB:-1}"
+ENGINE="${CONTAINER_ENGINE:-podman}"
 
 usage() {
   cat <<EOF
@@ -28,22 +29,26 @@ Environment:
   PGUSER             (default: postgres)
   PGDATABASE         Target database (default: recruit_db)
   PGPASSWORD         (default: postgres)
-  DATABASE_URL       If set, used for verify step instead of podman exec
+  CONTAINER_ENGINE   docker | podman (default: podman)
+  DATABASE_URL       If set, used for verify step instead of container exec
                      e.g. postgresql://postgres:postgres@127.0.0.1:5432/recruit_db
 
 Options:
-  --container NAME   Podman container (default: postgres)
+  --container NAME   Container name (default: postgres)
   --db NAME          Database name (default: recruit_db)
   --backups-dir DIR
   --skip-verify      Skip post-restore verification
   --no-create-db     Fail if database does not exist (do not CREATE DATABASE)
   -h, --help
 
-Requires: podman, gzip, psql client optional for verify via DATABASE_URL
+Requires: podman or docker (set CONTAINER_ENGINE=docker), gzip, psql client optional for verify via DATABASE_URL
 
 Published-port example (verify via host):
   export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/recruit_db'
   ./scripts/migration/prod-restore-podman.sh --container postgres
+
+Docker example:
+  CONTAINER_ENGINE=docker ./scripts/migration/prod-restore-podman.sh
 EOF
 }
 
@@ -59,56 +64,56 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-need_cmd podman gunzip
+need_cmd "$ENGINE" gunzip
 "${SCRIPT_DIR}/assemble-recruit-dump.sh" --backups-dir "$BACKUPS_DIR" --base "$DUMP_BASE"
 
 DUMP="${BACKUPS_DIR}/${DUMP_BASE}.dump"
 REMOTE="/tmp/${DUMP_BASE}.dump"
 
-podman inspect "$PODMAN_CONTAINER" >/dev/null 2>&1 || {
-  echo "Podman container not found: ${PODMAN_CONTAINER}" >&2
-  echo "List: podman ps -a" >&2
+"$ENGINE" inspect "$PODMAN_CONTAINER" >/dev/null 2>&1 || {
+  echo "Container not found: ${PODMAN_CONTAINER} (engine: ${ENGINE})" >&2
+  echo "List: ${ENGINE} ps -a" >&2
   exit 1
 }
 
 echo "Waiting for Postgres in ${PODMAN_CONTAINER} ..."
 for _ in $(seq 1 120); do
-  if podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
+  if "$ENGINE" exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
     pg_isready -U "$PGUSER" >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
+"$ENGINE" exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
   pg_isready -U "$PGUSER" >/dev/null 2>&1 || {
   echo "Postgres not ready in ${PODMAN_CONTAINER}" >&2
   exit 1
 }
 
 if [[ "$CREATE_DB" == "1" ]]; then
-  exists="$(podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
+  exists="$("$ENGINE" exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
     psql -U "$PGUSER" -d postgres -tAc \
     "SELECT 1 FROM pg_database WHERE datname = '${PGDATABASE}'" | tr -d '[:space:]')"
   if [[ "$exists" != "1" ]]; then
     echo "Creating database ${PGDATABASE} ..."
-    podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
+    "$ENGINE" exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
       psql -U "$PGUSER" -d postgres -c "CREATE DATABASE \"${PGDATABASE}\";"
   fi
 fi
 
 echo "Copying dump into container (${REMOTE}) ..."
-podman cp "$DUMP" "${PODMAN_CONTAINER}:${REMOTE}"
+"$ENGINE" cp "$DUMP" "${PODMAN_CONTAINER}:${REMOTE}"
 
 echo "Running pg_restore into ${PGDATABASE} ..."
 # --clean --if-exists: the target may already have tables/rows (e.g. an empty
 # schema or a seeded admin user from a fresh deploy's create_all()/seed step).
 # Drop those first so the restore is a clean, repeatable full replacement
 # rather than colliding with pre-existing primary keys.
-podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
+"$ENGINE" exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
   pg_restore -U "$PGUSER" -d "$PGDATABASE" --clean --if-exists --no-owner --no-acl --verbose "$REMOTE" \
   || {
     # pg_restore may exit 1 with warnings; treat as success if DB has core tables
-    if podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
+    if "$ENGINE" exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
       psql -U "$PGUSER" -d "$PGDATABASE" -tAc "SELECT to_regclass('public.subjects')" | grep -q subjects; then
       echo "pg_restore reported warnings but public.subjects exists; continuing." >&2
     else
@@ -116,13 +121,14 @@ podman exec -e PGPASSWORD="$PGPASSWORD" "$PODMAN_CONTAINER" \
     fi
   }
 
-podman exec "$PODMAN_CONTAINER" rm -f "$REMOTE" 2>/dev/null || true
+"$ENGINE" exec "$PODMAN_CONTAINER" rm -f "$REMOTE" 2>/dev/null || true
 
 if [[ "$SKIP_VERIFY" != "1" ]]; then
   echo ""
   if [[ -z "${DATABASE_URL:-}" ]]; then
     export PODMAN_CONTAINER PGUSER PGDATABASE PGPASSWORD
-    echo "Tip: set DATABASE_URL to the published host port for faster verify, or verify uses podman exec."
+    export CONTAINER_ENGINE="$ENGINE"
+    echo "Tip: set DATABASE_URL to the published host port for faster verify, or verify uses ${ENGINE} exec."
   fi
   "${SCRIPT_DIR}/migration-verify.sh"
 fi

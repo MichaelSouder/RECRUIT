@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Launcher for the RECRUIT air-gap deploy/update tooling.
+
+Stdlib-only, no install step required: this just puts the repo's scripts/
+directory on sys.path so `airgap` is importable as a package, then hands off
+to airgap.cli.main(). Run `./airgap-cli --help` for subcommands.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from airgap.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())

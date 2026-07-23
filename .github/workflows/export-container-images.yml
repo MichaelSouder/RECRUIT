@@ -40,10 +40,10 @@ jobs:
           test -f container-images/recruit-backend.tar
           test -f container-images/recruit-frontend.tar
           test -f container-images/AIRGAP_DEPLOY.md
-          test -f container-images/load-container-images.sh
-          test -x container-images/load-container-images.sh
-          test -f container-images/airgap-stack-up.sh
-          test -x container-images/airgap-stack-up.sh
+          test -f container-images/airgap-cli
+          test -x container-images/airgap-cli
+          test -d container-images/airgap
+          test -f container-images/airgap/cli.py
           test -f container-images/recruit-airgap.env.example
 
       # Split into two artifacts so Postgres/Redis are clearly visible and to reduce single-zip size limits.
@@ -56,8 +56,8 @@ jobs:
             container-images/redis-7-alpine.tar
             container-images/README-AIR-GAP.txt
             container-images/AIRGAP_DEPLOY.md
-            container-images/load-container-images.sh
-            container-images/airgap-stack-up.sh
+            container-images/airgap-cli
+            container-images/airgap/
             container-images/recruit-airgap.env.example
           if-no-files-found: error
           retention-days: 30
@@ -72,8 +72,8 @@ jobs:
             container-images/MANIFEST.txt
             container-images/README-AIR-GAP.txt
             container-images/AIRGAP_DEPLOY.md
-            container-images/load-container-images.sh
-            container-images/airgap-stack-up.sh
+            container-images/airgap-cli
+            container-images/airgap/
             container-images/recruit-airgap.env.example
           if-no-files-found: error
           retention-days: 30

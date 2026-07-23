@@ -26,7 +26,7 @@ Use `--base <name>` (or `DUMP_BASE=<name>`) with the scripts below to restore an
 
 ## Podman: assemble + restore + verify
 
-Defaults already match how `airgap-stack-up.sh` names things
+Defaults already match how `airgap-cli stack-up` names things
 (`PODMAN_CONTAINER=postgres`, `PGDATABASE=recruit_db`, `PGUSER=postgres`,
 `PGPASSWORD=postgres`), and these scripts are tracked executable in git, so
 on a standard deploy this is the entire command, from repo root:

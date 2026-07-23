@@ -40,9 +40,10 @@ python -c 'import app.models; from app.database import Base, engine; Base.metada
 ```
 
 Fixed in: `docker-compose.yml`, `docker-compose.prod.yml`,
-`scripts/airgap-stack-up.sh`, `scripts/start-stack-manual.sh`,
+`scripts/airgap/stack.py` (was `scripts/airgap-stack-up.sh`, since ported to
+Python), `scripts/start-stack-manual.sh`,
 `scripts/docker-init-db.sh` / `.ps1`, `scripts/docker-setup.sh` / `.ps1`,
-`container-images/airgap-stack-up.sh`, `container-images/AIRGAP_DEPLOY.md`,
+`container-images/airgap/stack.py`, `container-images/AIRGAP_DEPLOY.md`,
 `docs/AIRGAP_DEPLOY.md`, and the `output/container-images/` copies.
 
 New deployments (or any deployment recreated with `--recreate-app` /

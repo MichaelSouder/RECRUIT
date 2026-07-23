@@ -1,0 +1,3 @@
+# Only needed to run this package's test suite -- never required on the
+# air-gapped host, which only ever runs airgap-cli itself (stdlib only).
+pytest==7.4.3
