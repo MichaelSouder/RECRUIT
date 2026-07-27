@@ -17,9 +17,13 @@ This folder is where **`scripts/export-container-images.sh`** writes **`.tar`** 
 
 **Note:** GitHub Container Registry (Packages) only shows the **two RECRUIT app** images. **Postgres and Redis are not published to GHCR** — they only appear in this offline export (or in the CI artifacts below).
 
-## Why this folder is usually empty in git
+## Why the tarballs *are* committed here
 
-Tarballs are **large** (often 1–2+ GB total) and are **not committed**. `output/container-images/` is gitignored.
+Unlike most build output, the four `.tar` files under `output/container-images/` **are committed**, via **Git LFS** (see `.gitattributes`: `output/container-images/*.tar filter=lfs`). That is deliberate — it is what lets an air-gapped host with a deploy clone run **`scripts/airgap-cli cron-update`**, which rolls out an update only when this folder changes between commits. If these were gitignored, unattended updates could not work at all.
+
+Consequence: **a new bundle only reaches the air-gapped host once it is committed and pushed.** Re-running the export locally is not enough.
+
+Note the root-level **`container-images/`** folder *is* gitignored — that is the export script's default output location, which is why you must pass `OUTPUT_DIR` when refreshing the committed bundle (see Option C below).
 
 ## How to get the files
 
@@ -55,13 +59,16 @@ chmod +x scripts/export-container-images.sh
 
 Optional:
 
-```bash
-export IMAGE_PREFIX=ghcr.io/yourgithubuser
-export IMAGE_TAG=latest
-./scripts/export-container-images.sh
-```
+**Important:** the script's output directory defaults to **`container-images/`** at the repo root, which is **gitignored**. To refresh the *committed* LFS bundle that air-gapped hosts pull, you must point `OUTPUT_DIR` at `output/container-images/`:
 
-Output defaults to **`output/container-images/`** (`OUTPUT_DIR` overrides).
+```bash
+export IMAGE_PREFIX=ghcr.io/michaelsouder
+export IMAGE_TAG=latest
+export OUTPUT_DIR="$PWD/output/container-images"
+./scripts/export-container-images.sh
+
+git add output/container-images && git commit -m "deploy: refresh air-gap bundle" && git push
+```
 
 ## Load on the air-gapped machine
 

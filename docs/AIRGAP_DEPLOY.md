@@ -278,10 +278,49 @@ Extra args pass straight through to the underlying stack-up step, e.g.
 4. **`docker stop`** / **`docker rm`** **`backend`** and **`frontend`** (and Postgres/Redis only if you intentionally upgrade those images—Postgres data stays in the volume).
 5. Re-run the **`docker run`** commands from this guide with the same **`IMAGE_PREFIX`** and new **`TAG`**.
 
+### 15a. One-time setup of a deploy clone
+
+The unattended updater in §15b needs a **full git clone**, not a copied
+bundle. This requires the host to reach the git remote (directly or via an
+internal mirror) — a host with genuinely zero egress cannot use §15b and must
+stay on the bundle-transfer flow above.
+
+Prerequisites: **git**, **git-lfs**, **python3.11+**, docker or podman, cron.
+
+```bash
+# git-lfs is NOT optional: the image tars are LFS-tracked. Without it you get
+# ~130-byte pointer stubs and every 'load' fails.
+git lfs install
+
+sudo mkdir -p /opt/recruit && sudo chown "$USER" /opt/recruit
+git clone <repository-url> /opt/recruit
+cd /opt/recruit
+git lfs pull
+
+# Verify real tars, not pointer stubs (expect hundreds of MB, not ~130 bytes):
+ls -lh output/container-images/*.tar
+```
+
+Then create the config the stack reads (default location is
+`<bundle>/recruit-airgap.env`, and it stays untracked so updates never clobber it):
+
+```bash
+cp scripts/recruit-airgap.env.example output/container-images/recruit-airgap.env
+chmod 600 output/container-images/recruit-airgap.env
+# Fill in every CHANGE_ME, then bring the stack up once:
+./scripts/airgap-cli stack-up --dry-run
+./scripts/airgap-cli stack-up
+```
+
+Two rules this clone must obey, both enforced by `cron-update`:
+
+- It must stay on **`main`** — the updater aborts on any other branch.
+- **Never commit or hand-edit anything in it.** Merges are `--ff-only`; on
+  divergence the updater fails and refuses to auto-reset.
+
 ### 15b. Unattended updates (cron)
 
-If this host has a full git clone of the repo (not just a bundle) tracking
-main via LFS, **`scripts/airgap-cli cron-update`** can poll for and roll out
+Once §15a is done, **`scripts/airgap-cli cron-update`** can poll for and roll out
 updates on its own: it fetches the tracked branch, fast-forward-only merges
 (never resets — the clone must never be hand-edited), pulls LFS objects, and
 only if `output/container-images/` actually changed does it load the new
@@ -289,18 +328,32 @@ images, recreate backend/frontend, health-check both, and either prune the
 old images (success) or leave them in place with rollback commands printed
 (failure).
 
+Because the rollout trigger is a change to `output/container-images/`, a new
+build reaches this host **only after someone re-exports the bundle and pushes
+it** (see `output/README.md`). Commits that don't touch that folder advance the
+clone but deploy nothing.
+
 Install the hourly cron job once:
 
 ```bash
+sudo mkdir -p /var/log/recruit && sudo chown "$USER" /var/log/recruit
+./scripts/airgap-cli cron-update --dry-run   # verify fetch + detection first
 ./scripts/airgap-cli install-cron
+crontab -l
 ```
 
 Default schedule is hourly (`0 * * * *`); override with `--schedule`. Logs go
 to `/var/log/recruit/airgap-cron-update.log` by default (`--log-file` to
-change). Preview what a run would do without changing anything:
+change).
 
-```bash
-./scripts/airgap-cli cron-update --dry-run
+**If you override the published ports** (`BACKEND_PUBLISH` / `FRONTEND_PUBLISH`
+in `recruit-airgap.env`), you must also fix the cron line by hand.
+`install-cron` writes a bare `cron-update` invocation, and its health gate
+defaults to `18000`/`18080`; on non-default ports every update would fail the
+health check and skip the prune. Add the matching flags:
+
+```
+0 * * * * /opt/recruit/scripts/airgap-cli cron-update --backend-publish 9000:8000 --frontend-publish 9080:80 >> /var/log/recruit/airgap-cron-update.log 2>&1
 ```
 
 Rollback after a failed unattended update: the error output prints the exact

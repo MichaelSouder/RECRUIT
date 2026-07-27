@@ -1,5 +1,5 @@
 RECRUIT container image export
-Generated: 2026-06-04T16:23:13Z
+Generated: 2026-07-27T17:22:16Z
 TARGET_PLATFORM=linux/amd64
 IMAGE_PREFIX=ghcr.io/michaelsouder
 IMAGE_TAG=latest
@@ -12,8 +12,7 @@ Required files (all four — Postgres & Redis are NOT in GHCR; they ship only in
 
 Bundled documentation (same folder after export):
   AIRGAP_DEPLOY.md
-  load-container-images.sh
-  airgap-stack-up.sh
+  airgap-cli (+ airgap/ package)
   recruit-airgap.env.example
   README-AIR-GAP.txt
 

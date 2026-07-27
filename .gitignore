@@ -20,8 +20,12 @@ ENV/
 output/*.pdf
 output/**/*.pdf
 
-# Offline container image .tar bundles (~hundreds of MB; scp to prod, do not commit without Git LFS)
-container-images/
+# Scratch output of scripts/export-container-images.sh (its default OUTPUT_DIR).
+# Root-anchored on purpose: output/container-images/ is the COMMITTED bundle
+# (tars via Git LFS) that air-gapped hosts pull with `airgap-cli cron-update`.
+# An unanchored `container-images/` also matched output/container-images/, which
+# silently dropped newly added bundle files (e.g. airgap-cli) from commits.
+/container-images/
 
 # Node
 node_modules/
