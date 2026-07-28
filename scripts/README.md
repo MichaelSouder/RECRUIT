@@ -108,6 +108,17 @@ a host where `pip install` isn't an option.
 names, DOBs, contact details — is written verbatim. Its default output path is
 gitignored; treat the file like a database dump.
 
+**On the snapshot instance, start with `--no-samples`.** That server carries ~77
+databases and ~2400 tables, so sample queries (one per table) dominate the run:
+the structural sweep — databases, tables, exact counts, sizes — takes about 30
+seconds, while a full sweep with sample rows takes 15+ minutes. Use `-d` to pull
+samples for the databases you actually care about.
+
+```bash
+./scripts/db-inventory.sh --no-samples          # all databases, structure only (~30s)
+./scripts/db-inventory.sh -d recruit_db         # one database, with 20 sample rows
+```
+
 ---
 
 Superseded bash implementations of the air-gap tooling above (`airgap-stack-up.sh`,

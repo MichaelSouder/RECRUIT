@@ -45,6 +45,9 @@ Usage: db-inventory.sh [-d database] [-n rows] [-o output] [-u url] [-c containe
 
   -d, --database    Only inventory this one database (default: all non-template databases)
   -n, --limit       Sample rows per table (default: 20)
+      --no-samples  Structure only: databases, tables, exact row counts, sizes.
+                    Skips the per-table sample queries, which dominate the
+                    runtime on a server with many tables.
   -o, --output      Output file, or "-" for stdout
                     (default: output/db-inventory-<host>-<UTC timestamp>.md)
   -u, --url         Postgres connection URL (implies a local psql client)
@@ -63,6 +66,7 @@ OUTPUT=""
 URL_OVERRIDE=""
 CONTAINER_OVERRIDE="${PG_CONTAINER:-}"
 REDACT=1
+SAMPLES=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -72,6 +76,7 @@ while [[ $# -gt 0 ]]; do
     -u|--url)       URL_OVERRIDE="$2"; shift 2 ;;
     -c|--container) CONTAINER_OVERRIDE="$2"; shift 2 ;;
     --no-redact)    REDACT=0; shift ;;
+    --no-samples)   SAMPLES=0; shift ;;
     -h|--help)      usage; exit 0 ;;
     *) log_err "Unknown argument: $1"; usage; exit 1 ;;
   esac
@@ -105,6 +110,14 @@ with_timeout() {
   return "$status"
 }
 
+# Only RUNNING containers count. `container inspect` (which the older
+# list-postgres-databases.sh uses) also succeeds for a stopped container, which
+# means it can select a dead one and then fail on the first `exec`.
+_running_containers() {
+  local engine="$1"
+  with_timeout 5 "$engine" ps --format '{{.Names}}\t{{.Image}}' 2>/dev/null || true
+}
+
 find_container() {
   local candidates=()
   if [[ -n "$CONTAINER_OVERRIDE" ]]; then
@@ -112,15 +125,34 @@ find_container() {
   else
     candidates=(recruit_postgres_snapshot recruit_postgres)
   fi
-  local engine name
+
+  local engine name running
+  # Preferred names first, so an explicit -c and this repo's usual containers
+  # still win over an unrelated Postgres that happens to be up.
   for engine in docker podman; do
     command -v "$engine" >/dev/null 2>&1 || continue
+    running="$(_running_containers "$engine")"
     for name in "${candidates[@]}"; do
-      if with_timeout 5 "$engine" container inspect "$name" >/dev/null 2>&1; then
+      if grep -qE "^${name}[[:space:]]" <<<"$running"; then
         echo "$engine $name"
         return 0
       fi
     done
+  done
+
+  # Nothing preferred is up. Rather than failing, fall back to any running
+  # container whose image looks like Postgres -- this box routinely has several.
+  # The caller logs which one was chosen so the pick is never silent.
+  [[ -n "$CONTAINER_OVERRIDE" ]] && return 1
+  for engine in docker podman; do
+    command -v "$engine" >/dev/null 2>&1 || continue
+    while IFS=$'\t' read -r name image; do
+      [[ -n "$name" ]] || continue
+      if [[ "$image" == *postgres* ]]; then
+        echo "$engine $name"
+        return 0
+      fi
+    done <<<"$(_running_containers "$engine")"
   done
   return 1
 }
@@ -186,6 +218,10 @@ if [[ "$MODE" == "tcp" ]]; then
   SOURCE_DESC="psql -> $(MASK_URL "$BASE_URL")"
 else
   log_info "Connecting via '$ENGINE exec' into container '$CONTAINER'"
+  if [[ -z "$CONTAINER_OVERRIDE" && "$CONTAINER" != "recruit_postgres_snapshot" && "$CONTAINER" != "recruit_postgres" ]]; then
+    log_warn "Auto-picked '$CONTAINER' -- neither recruit_postgres_snapshot nor recruit_postgres is running."
+    log_warn "If that's the wrong server, pass -c <container> or -u <url>."
+  fi
   SOURCE_DESC="$ENGINE exec -> container '$CONTAINER'"
 fi
 
@@ -221,6 +257,15 @@ if [[ ${#DATABASES[@]} -eq 0 ]]; then
   exit 1
 fi
 
+# Say what was discovered before doing any work. "Only one database showed up"
+# is nearly always the connection resolving to a different server than expected,
+# not a missing database -- printing both the source and the list makes that
+# visible immediately instead of after reading the generated document.
+log_ok "Found ${#DATABASES[@]} database(s) on this server: ${DATABASES[*]}"
+if [[ -n "$ONLY_DB" ]]; then
+  log_info "Restricting to '$ONLY_DB' (-d given); drop -d to inventory all of them."
+fi
+
 emit "# PostgreSQL database inventory"
 emit ""
 emit "| | |"
@@ -228,7 +273,11 @@ emit "|---|---|"
 emit "| Generated (UTC) | \`$GENERATED_AT\` |"
 emit "| Source | \`$SOURCE_DESC\` |"
 emit "| Server version | \`$SERVER_VERSION\` |"
-emit "| Sample rows per table | $LIMIT |"
+if [[ "$SAMPLES" -eq 1 ]]; then
+  emit "| Sample rows per table | $LIMIT |"
+else
+  emit "| Sample rows per table | none (\`--no-samples\`) |"
+fi
 if [[ "$REDACT" -eq 1 ]]; then
   emit "| Redacted columns | \`ssn\`, \`password\`, \`hashed_password\` |"
 else
@@ -275,23 +324,26 @@ for db in "${DATABASES[@]}"; do
   emit "### Tables"
   emit ""
 
-  # The per-table COUNT(*) loop is driven from the shell because SQL can't
-  # COUNT(*) a table named by a value without dynamic SQL, and this script
-  # deliberately creates no functions on the target database. Exact counts
-  # (not n_live_tup estimates) also keep this summary and the per-table
-  # sections below from ever disagreeing.
-  TABLES=()
-  while IFS='|' read -r schema tbl; do
-    [[ -n "$schema" && -n "$tbl" ]] && TABLES+=("$schema|$tbl")
-  done < <(psql_raw "$db" "
-    SELECT table_schema || '|' || table_name
-    FROM information_schema.tables
-    WHERE table_type = 'BASE TABLE'
-      AND table_schema NOT IN ('pg_catalog', 'information_schema')
-    ORDER BY table_schema, table_name;
-  ")
+  # Table list, EXACT row counts, and sizes in a single query for the whole
+  # database. query_to_xml runs a real COUNT(*) per table server-side, which is
+  # how you get exact counts without dynamic SQL and without creating a function
+  # on the target database. Doing this per table from the shell instead meant
+  # two psql round trips per table; across an instance with dozens of databases
+  # and hundreds of tables each, that round-trip cost dominated the whole run.
+  TABLE_META="$(psql_raw "$db" "
+    SELECT t.table_schema || '|' || t.table_name || '|' ||
+           COALESCE((xpath('/row/cnt/text()',
+             query_to_xml(format('SELECT count(*) AS cnt FROM %I.%I', t.table_schema, t.table_name),
+                          false, true, '')))[1]::text, '?') || '|' ||
+           COALESCE(pg_size_pretty(pg_total_relation_size(
+             format('%I.%I', t.table_schema, t.table_name)::regclass)), '?')
+    FROM information_schema.tables t
+    WHERE t.table_type = 'BASE TABLE'
+      AND t.table_schema NOT IN ('pg_catalog', 'information_schema')
+    ORDER BY t.table_schema, t.table_name;
+  " 2>/dev/null || echo "")"
 
-  if [[ ${#TABLES[@]} -eq 0 ]]; then
+  if [[ -z "$TABLE_META" ]]; then
     emit "_No user tables in this database._"
     emit ""
     continue
@@ -299,15 +351,43 @@ for db in "${DATABASES[@]}"; do
 
   emit "| Schema | Table | Exact rows | Total size |"
   emit "|---|---|---:|---:|"
-  declare -a COUNTS=()
-  for entry in "${TABLES[@]}"; do
-    schema="${entry%%|*}"; tbl="${entry##*|}"
-    count="$(psql_raw "$db" "SELECT count(*) FROM \"$schema\".\"$tbl\";" 2>/dev/null || echo "?")"
-    size="$(psql_raw "$db" "SELECT pg_size_pretty(pg_total_relation_size('\"$schema\".\"$tbl\"'::regclass));" 2>/dev/null || echo "?")"
+  TABLES=(); COUNTS=()
+  while IFS='|' read -r schema tbl count size; do
+    [[ -n "$schema" && -n "$tbl" ]] || continue
+    TABLES+=("$schema|$tbl")
     COUNTS+=("$count")
     emit "| \`$schema\` | \`$tbl\` | $count | $size |"
-  done
+  done <<<"$TABLE_META"
   emit ""
+
+  # Columns and primary keys for every table, also one query each. Looked up
+  # per table with awk below -- an awk process is orders of magnitude cheaper
+  # than another psql round trip through docker exec.
+  COLUMN_META=""; PK_META=""
+  if [[ "$SAMPLES" -eq 1 ]]; then
+  COLUMN_META="$(psql_raw "$db" "
+    SELECT table_schema || '|' || table_name || '|' || quote_ident(column_name) || '|' || column_name
+    FROM information_schema.columns
+    WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+    ORDER BY table_schema, table_name, ordinal_position;
+  " 2>/dev/null || echo "")"
+
+  PK_META="$(psql_raw "$db" "
+    SELECT n.nspname || '|' || c.relname || '|' ||
+           string_agg(quote_ident(a.attname), ', ' ORDER BY k.ord)
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
+    WHERE i.indisprimary AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+    GROUP BY n.nspname, c.relname;
+  " 2>/dev/null || echo "")"
+  fi
+
+  if [[ "$SAMPLES" -eq 0 ]]; then
+    continue
+  fi
 
   emit "### Sample rows (first $LIMIT per table)"
   emit ""
@@ -329,17 +409,13 @@ for db in "${DATABASES[@]}"; do
     fi
 
     # Column list drives both the Markdown header and the row expression.
-    # quote_ident() comes from the server so odd column names stay valid.
+    # quote_ident() came from the server so odd column names stay valid.
     idents=(); headers=()
     while IFS=$'\t' read -r ident raw; do
       [[ -n "$ident" ]] || continue
       idents+=("$ident"); headers+=("$raw")
-    done < <(psql_raw "$db" "
-      SELECT quote_ident(column_name) || chr(9) || column_name
-      FROM information_schema.columns
-      WHERE table_schema = '$schema' AND table_name = '$tbl'
-      ORDER BY ordinal_position;
-    ")
+    done < <(awk -F'|' -v s="$schema" -v t="$tbl" \
+               '$1==s && $2==t {print $3"\t"$4}' <<<"$COLUMN_META")
 
     if [[ ${#idents[@]} -eq 0 ]]; then
       emit "_(could not read columns for this table)_"
@@ -366,15 +442,7 @@ for db in "${DATABASES[@]}"; do
     row_expr="'| ' || $row_expr || ' |'"
 
     # Order by primary key when there is one, so repeated runs are comparable.
-    pk="$(psql_raw "$db" "
-      SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY k.ord)
-      FROM pg_index i
-      JOIN pg_class c ON c.oid = i.indrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
-      JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
-      WHERE i.indisprimary AND n.nspname = '$schema' AND c.relname = '$tbl';
-    " 2>/dev/null || echo "")"
+    pk="$(awk -F'|' -v s="$schema" -v t="$tbl" '$1==s && $2==t {print $3}' <<<"$PK_META")"
 
     if [[ -n "$pk" ]]; then
       order_clause="ORDER BY $pk"
