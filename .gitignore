@@ -20,6 +20,11 @@ ENV/
 output/*.pdf
 output/**/*.pdf
 
+# DB inventory documents from scripts/db-inventory.sh. Same reasoning as the
+# PDFs above: they embed real sample rows. Name-scoped rather than `output/*.md`
+# so output/README.md stays tracked.
+output/db-inventory-*.md
+
 # Scratch output of scripts/export-container-images.sh (its default OUTPUT_DIR).
 # Root-anchored on purpose: output/container-images/ is the COMMITTED bundle
 # (tars via Git LFS) that air-gapped hosts pull with `airgap-cli cron-update`.

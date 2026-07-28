@@ -96,6 +96,17 @@ and verifying it landed correctly. Full procedure: **`docs/PROD_CUTOVER_SNAPSHOT
 | `fix-missing-tables.sh` | A running backend is missing tables (`relation "users" does not exist`) because it was started before a since-fixed model-import bug — creates the missing tables without a rebuild/redeploy. See `docs/FIX_MISSING_TABLES.md`. |
 | `start-stack-manual.sh` | `airgap-cli stack-up` fails with "invalid reference format" on a given Podman setup — runs each `podman run` directly so you can see exactly which one fails. |
 | `db_snapshot_pdf.py` | Generate a PDF snapshot of a database's public tables (schema + row counts), e.g. for a point-in-time record. `--preset recruit\|arc\|dvbic-research\|all-legacy`. Requires `psycopg2-binary` and `fpdf2` (`pip install` — this one script, unlike the air-gap tooling, isn't meant to run on a host with no network). |
+| `db-inventory.sh` | Generate a **Markdown** inventory — database list, every table with its exact `COUNT(*)` and size, and the first N rows (default 20) of each. Same connection resolution as `list-postgres-databases.sh` (URL / `DATABASE_URL` / `docker`-`podman exec`). bash + `psql` only, so unlike `db_snapshot_pdf.py` it runs on an air-gapped host with nothing to install, and the output diffs and greps — use it to compare a database before and after a restore or migration. |
+
+`db-inventory.sh` vs `db_snapshot_pdf.py`: same underlying idea, different
+targets. Reach for the PDF when you want a fixed point-in-time artifact to file;
+reach for `db-inventory.sh` when you want something diffable, or when you're on
+a host where `pip install` isn't an option.
+
+**Both emit real row data.** `db-inventory.sh` masks `ssn`, `password`, and
+`hashed_password` by default (`--no-redact` opts out), but every other column —
+names, DOBs, contact details — is written verbatim. Its default output path is
+gitignored; treat the file like a database dump.
 
 ---
 
